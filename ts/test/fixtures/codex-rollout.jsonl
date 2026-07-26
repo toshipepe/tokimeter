@@ -1,0 +1,7 @@
+{"type":"turn_context","timestamp":"2026-07-08T11:00:00.000Z","payload":{"model":"gpt-5.5","effort":"high","cwd":"/Users/dev/myproject"}}
+{"type":"event_msg","timestamp":"2026-07-08T11:00:30.000Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":15000,"cached_input_tokens":12000,"output_tokens":800,"reasoning_output_tokens":300}}}}
+{"type":"event_msg","timestamp":"2026-07-08T11:01:00.000Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":0,"cached_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0}}}}
+{"type":"turn_context","timestamp":"2026-07-08T11:02:00.000Z","payload":{"model":"gpt-5.4-mini","effort":"low","cwd":"/Users/dev/myproject"}}
+{"type":"event_msg","timestamp":"2026-07-08T11:02:30.000Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":500,"cached_input_tokens":0,"output_tokens":100,"reasoning_output_tokens":0}}}}
+garbage line
+{"type":"event_msg","timestamp":"2026-07-08T11:03:00.000Z","payload":{"type":"agent_message","message":"not a token count"}}

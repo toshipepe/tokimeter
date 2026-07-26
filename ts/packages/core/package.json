@@ -1,0 +1,29 @@
+{
+  "name": "@tokimeter/core",
+  "version": "0.2.0",
+  "description": "Shared core: pricing database, cost calculator, optimizer",
+  "main": "src/index.js",
+  "type": "module",
+  "files": [
+    "src",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": "./src/index.js",
+    "./pricing.js": "./src/pricing.js"
+  },
+  "author": {
+    "name": "ToshiPepe",
+    "url": "https://github.com/toshipepe"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/toshipepe/tokimeter.git",
+    "directory": "ts/packages/core"
+  },
+  "homepage": "https://github.com/toshipepe/tokimeter",
+  "engines": {
+    "node": ">=18"
+  }
+}

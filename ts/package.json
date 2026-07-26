@@ -1,0 +1,26 @@
+{
+  "name": "tokimeter-ts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "FinOps for AI agents \u2014 proxy, VS Code extension, and shared core",
+  "scripts": {
+    "privacy:check": "node ../scripts/privacy-check.mjs --ci",
+    "privacy:self-test": "node ../scripts/privacy-check.mjs --self-test",
+    "privacy:identity": "node ../scripts/privacy-check.mjs --identity",
+    "privacy:setup": "git config core.hooksPath .githooks",
+    "build": "node --check packages/proxy/src/server.js && node --check packages/proxy/src/cli.js && node --check packages/proxy/src/parsers.js && node --check packages/proxy/src/cloud-sync.js && node --check packages/vscode-extension/src/extension.js",
+    "test": "npm run build && node -e \"import('./packages/core/src/index.js')\" && node --test test/parsers.test.js test/pace.test.js test/cloud-sync.test.js test/cloud-connect.test.js",
+    "dev:proxy": "node packages/proxy/src/server.js",
+    "dev:vscode": "echo 'Open ts/packages/vscode-extension in VS Code and press F5'",
+    "pack:core": "npm pack --workspace @tokimeter/core",
+    "pack:core:dry": "npm pack --workspace @tokimeter/core --dry-run",
+    "pack:proxy": "npm pack --workspace tokimeter",
+    "pack:proxy:dry": "npm pack --workspace tokimeter --dry-run",
+    "pack:vscode": "npm run package --workspace tokimeter-vscode",
+    "release:check": "npm run privacy:check && npm run build && npm test && npm run pack:core:dry && npm run pack:proxy:dry"
+  },
+  "workspaces": [
+    "packages/*"
+  ]
+}

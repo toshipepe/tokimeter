@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Tokimeter mark: speedometer gauge + needle + pivot -->
+  <path d="M15 49 A24 24 0 1 1 49 49" fill="none" stroke="#4ade80" stroke-width="9.5" stroke-linecap="round"/>
+  <circle cx="32" cy="56" r="5" fill="#4ade80"/>
+  <line x1="32" y1="32" x2="43.5" y2="20.5" stroke="#4ade80" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="32" cy="32" r="6.5" fill="#4ade80"/>
+</svg>

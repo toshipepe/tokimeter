@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tokimeter"
+version = "0.2.0"
+description = "FinOps for AI agents — track, attribute, and optimize LLM spend across workflows"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [{name = "Tokimeter Contributors"}]
+keywords = ["ai", "agents", "finops", "cost", "optimization", "llm", "openai", "anthropic", "gemini"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Office/Business :: Financial",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+tokimeter = "tokimeter.cli:main"
+tokimeter-hosted = "tokimeter.hosted:main"
+
+[project.urls]
+Homepage = "https://github.com/toshipepe/tokimeter"
+Repository = "https://github.com/toshipepe/tokimeter"
+
+[tool.setuptools.packages.find]
+where = ["."]

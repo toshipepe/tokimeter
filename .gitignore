@@ -1,0 +1,64 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+node_modules/
+*.tgz
+*.vsix
+!site/download/*.vsix
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+.npmrc
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+
+# Local logs
+*.log
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.vscode/
+.cursor/
+.idea/
+*.swp
+.DS_Store
+ts/packages/proxy/src/core/
+demo/home/
+
+# Private local workspaces, agent state, and handoffs
+.local/
+.codex/
+.agents/
+HANDOFF.md
+LAUNCH_POSTS.md
+ROADMAP.md
+
+# Wrangler (Cloudflare Pages deploy)
+.wrangler/
+.dev.vars
+worker-configuration.d.ts
+
+# Local Claude Code dev config
+.claude/
+
+# Supabase CLI link state (local only)
+pro/supabase/.temp/

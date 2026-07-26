@@ -1,0 +1,11 @@
+null
+{"type":"session_meta","timestamp":"2026-07-08T11:00:00.000Z","payload":{"session_id":"edge-sess","cwd":"/Users/dev/meta-project","originator":"Codex Desktop","cli_version":"0.142.5"}}
+{"type":"event_msg","timestamp":"2026-07-08T11:00:10.000Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"cached_input_tokens":0,"output_tokens":20,"reasoning_output_tokens":0},"total_token_usage":{"input_tokens":100,"cached_input_tokens":0,"output_tokens":20},"model_context_window":258400},"rate_limits":{"limit_id":"codex","primary":{"used_percent":4.0,"window_minutes":300,"resets_at":1783463415},"secondary":{"used_percent":56.0,"window_minutes":10080,"resets_at":1783889187},"plan_type":"plus"}}}
+{"type":"event_msg","timestamp":"2026-07-08T11:00:20.000Z","payload":{"type":"token_count","info":null}}
+{"type":"event_msg","timestamp":"2026-07-08T11:00:30.000Z","payload":{"type":"token_count"}}
+{"type":"event_msg","timestamp":"2026-07-08T11:00:40.000Z","payload":null}
+{"type":"turn_context","timestamp":"2026-07-08T11:01:00.000Z","payload":{"model":"gpt-5.5","effort":"medium","cwd":"/Users/dev/turn-project","workspace_roots":["/Users/dev/turn-project"],"sandbox_policy":{"type":"read-only"}}}
+{"type":"event_msg","timestamp":"2026-07-08T11:01:30.000Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":"2000","cached_input_tokens":"1500","output_tokens":"50","reasoning_output_tokens":"25"}},"rate_limits":{"primary":{"used_percent":5.5,"window_minutes":300,"resets_at":1783464000},"secondary":{"used_percent":57.0,"window_minutes":10080,"resets_at":1783889187},"plan_type":"plus"}}}
+{"type":"compacted","timestamp":"2026-07-08T11:02:00.000Z","payload":{"message":"context compacted"}}
+{"type":"response_item","timestamp":"2026-07-08T11:02:10.000Z","payload":{"type":"message","role":"assistant"}}
+{"type":"event_msg","timestamp":"2026-07-08T11:02:3

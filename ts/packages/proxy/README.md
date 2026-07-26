@@ -1,0 +1,91 @@
+# Tokimeter
+
+**A private, local-first cost and budget meter for AI coding agents.**
+
+See what **Claude Code, Codex CLI, Cursor, Grok Build, Hermes, opencode, Cline,
+and Copilot CLI** actually use, what that usage would cost, and when it crosses
+a budget you set. Local reports need no Tokimeter account, provider API key,
+proxy, telemetry, or prompt upload. Usage metadata only — your prompts and code
+stay on your machine unless you explicitly connect the optional dashboard.
+
+## Try one local report
+
+```bash
+npx tokimeter report
+```
+
+`npx` downloads Tokimeter into npm's temporary cache and runs one local report.
+It does not permanently install the `tokimeter` command, start an ongoing local
+meter, or enable optional dashboard syncing. It reads the usage metadata your tools already
+write locally and shows cost and tokens by tool, provider, model, project, and
+day — including exact cache read/write accounting and what prompt caching saved
+you. `--days=7`, `--tool cursor`, `--provider xai`, `--json`.
+
+The optional hosted dashboard starts with a 7-day Pro trial. If you do not
+upgrade, cloud sync and hosted access pause at trial end; synced cloud data is
+deleted 30 days later. Local reports and tracking remain free and continue on
+your device.
+
+Live-verified readers in this release: Claude Code, Codex CLI, Cursor
+CLI/Desktop Agent, Grok Build, Hermes, opencode 1.17.18, and Cline CLI 3.0.39.
+GitHub Copilot CLI and Aider are fixture-tested but were not completed as live
+requests during release testing. Paid Anthropic/OpenAI API routes are
+test-covered but were not exercised against paid APIs.
+
+`--provider xai` combines direct Grok Build usage with xAI OAuth subscription
+usage through Hermes while preserving each tool in **By tool**. No provider
+account identity or credential is read or stored.
+
+## Install Tokimeter
+
+```bash
+npm install -g tokimeter && "$(npm prefix -g)/bin/tokimeter" setup --auto
+```
+
+Close and reopen your terminal when setup finishes. Then keep using `codex`,
+`claude`, and your other supported tools normally. Calling the executable by
+its full npm location avoids the common macOS/zsh case where npm's global
+executable directory is not yet on `PATH`; setup configures future terminals.
+
+## Limits: the 5-hour window
+
+```bash
+tokimeter limits
+```
+
+Subscription tools meter rolling windows and weekly caps. `limits` shows your
+locally observed usage inside those windows, with warnings against budgets you
+set. When Codex records its own rate-limit counters and reset times, Tokimeter
+labels them **Vendor-reported**. It does not invent a vendor percentage or
+reset time for tools that do not record one. The Grok view combines direct
+Grok Build and Hermes xAI OAuth usage:
+
+```bash
+tokimeter config set budget.claude5h 60
+tokimeter config set budget.grok5h 25
+tokimeter config set budget.daily 50
+```
+
+## Ongoing local meter after setup
+
+You get live per-call usage accounting, a Claude status-line HUD
+(`today ~$48.16 · 5h ~$48.16 (80% ⚠)`), budgets, and:
+
+```bash
+tokimeter watch --tool claude    # live feed, per tool
+tokimeter latest --tool codex    # most recent calls
+tokimeter pricing refresh        # pull community price table (~280 models)
+tokimeter doctor                 # optional troubleshooting
+tokimeter uninstall              # removes everything it installed
+```
+
+## Honest numbers
+
+`~$X` marks API-equivalent estimates computed from exact local token counts —
+on a subscription that's the value you're extracting, not a bill. Billed
+API-key usage (via the optional localhost proxy) shows without the `~`.
+A budget percentage is measured against a threshold you configured; it is not
+presented as a provider subscription allowance.
+
+MIT licensed. Source, security notes, and issue tracker:
+https://github.com/toshipepe/tokimeter

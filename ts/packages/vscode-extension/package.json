@@ -1,0 +1,112 @@
+{
+  "name": "tokimeter-vscode",
+  "displayName": "Tokimeter — AI Cost Tracker",
+  "description": "See real-time LLM cost tips while Claude Code, Codex, or Cursor thinks. Track spending, find savings.",
+  "version": "0.1.0",
+  "publisher": "tokimeter",
+  "icon": "icon.png",
+  "homepage": "https://github.com/toshipepe/tokimeter#readme",
+  "bugs": {
+    "url": "https://github.com/toshipepe/tokimeter/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/toshipepe/tokimeter"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "ai",
+    "agents",
+    "cost",
+    "finops",
+    "openai",
+    "anthropic",
+    "claude",
+    "llm"
+  ],
+  "galleryBanner": {
+    "color": "#0d1117",
+    "theme": "dark"
+  },
+  "main": "./src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "tokimeter.showDashboard",
+        "title": "Tokimeter: Show Cost Dashboard"
+      },
+      {
+        "command": "tokimeter.showTip",
+        "title": "Tokimeter: Show Cost Tip"
+      },
+      {
+        "command": "tokimeter.toggleProxy",
+        "title": "Tokimeter: Toggle Proxy"
+      },
+      {
+        "command": "tokimeter.clearHistory",
+        "title": "Tokimeter: Clear History"
+      },
+      {
+        "command": "tokimeter.setupLocal",
+        "title": "Tokimeter: Run Local Setup"
+      },
+      {
+        "command": "tokimeter.openWatch",
+        "title": "Tokimeter: Open Watch Terminal"
+      },
+      {
+        "command": "tokimeter.showLatestCall",
+        "title": "Tokimeter: Show Latest Call"
+      },
+      {
+        "command": "tokimeter.toggleTips",
+        "title": "Tokimeter: Toggle Thinking Tips"
+      }
+    ],
+    "configuration": {
+      "title": "Tokimeter",
+      "properties": {
+        "tokimeter.proxyUrl": {
+          "type": "string",
+          "default": "http://localhost:8788",
+          "description": "Tokimeter proxy URL (set this if you run the proxy server separately)"
+        },
+        "tokimeter.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show cost in the VS Code status bar"
+        },
+        "tokimeter.showTipsDuringWait": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show rotating cost tips when AI tools are thinking"
+        },
+        "tokimeter.tipInterval": {
+          "type": "number",
+          "default": 5000,
+          "description": "How often to rotate tips (milliseconds)"
+        },
+        "tokimeter.dailyBudget": {
+          "type": "number",
+          "default": 0,
+          "description": "Optional daily budget in dollars for local VS Code warnings. Set 0 to disable budget warnings."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "echo 'skip compile'",
+    "package": "npx --yes @vscode/vsce package --out tokimeter-vscode.vsix"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0"
+  }
+}
