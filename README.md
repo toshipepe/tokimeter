@@ -353,8 +353,10 @@ Project privacy defaults to the final folder name only. Use
 `tokimeter config set cloud.projectMode off` to omit projects completely, or
 `full` to explicitly opt into full paths before the next sync.
 
-Prompts and code are never collected on any plan, on the local tool or the
-dashboard.
+Prompts and code are never stored or uploaded on any plan, by the local tool or
+the dashboard. The optional VS Code thinking-tip detector transiently checks
+local terminal output for activity markers; it never retains or transmits that
+output and can be disabled with `tokimeter.showTipsDuringWait`.
 
 ## Project structure
 

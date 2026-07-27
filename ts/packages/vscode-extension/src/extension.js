@@ -418,7 +418,6 @@ async function toggleTips() {
 class WaitStateDetector {
   constructor() {
     this.thinkingState = false;
-    this.terminalBuffer = '';
     this.setup();
   }
 
@@ -428,9 +427,14 @@ class WaitStateDetector {
       return;
     }
 
-    // Monitor terminal output for AI thinking patterns
+    // Check terminal output transiently for AI thinking patterns. The event
+    // contents are never retained or transmitted.
     this.terminalSubscription = vscode.window.onDidWriteTerminalData(e => {
-      this.terminalBuffer = (this.terminalBuffer + e.data).slice(-500);
+      const config = vscode.workspace.getConfiguration('tokimeter');
+      if (!config.get('showTipsDuringWait', true)) {
+        this.thinkingState = false;
+        return;
+      }
 
       // Detect spinner patterns: ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏
       // Or text patterns: "Thinking...", "Working...", "Generating..."

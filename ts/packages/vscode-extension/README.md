@@ -26,7 +26,10 @@ built-in AI, or closed desktop traffic by itself.
 ## Privacy
 
 Tokimeter tracks **usage metadata only**: tokens, models, costs, timestamps,
-and project paths. Prompts and code are never read, stored, or displayed. See
+and project paths. Prompts and code are never stored, displayed, or
+transmitted. When thinking tips are enabled, the extension transiently checks
+integrated-terminal output for spinner and activity markers; it does not retain
+the output. Disable `tokimeter.showTipsDuringWait` to turn off that check. See
 the project's [SECURITY.md](https://github.com/toshipepe/tokimeter/blob/main/SECURITY.md).
 
 ## First run
@@ -48,7 +51,7 @@ status bar shows "offline", run **Tokimeter: Run Local Setup** or
 | --- | --- | --- |
 | `tokimeter.proxyUrl` | `http://localhost:8788` | Where the local proxy listens |
 | `tokimeter.showStatusBar` | `true` | Show today's cost in the status bar |
-| `tokimeter.showTipsDuringWait` | `true` | Rotating local tips while AI tools think |
+| `tokimeter.showTipsDuringWait` | `true` | Rotating local tips while AI tools think; transiently checks terminal activity markers |
 | `tokimeter.tipInterval` | `5000` | Tip rotation interval (ms) |
 | `tokimeter.dailyBudget` | `0` | Daily budget in dollars for local warnings (0 = off) |
 
