@@ -1625,7 +1625,12 @@ export function renderReportMarkdown(report) {
 }
 
 export function renderReportHtml(report) {
-  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const esc = (s) => String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
   const t = report.totals || {};
   const table = (title, head, rows) => rows.length ? `
   <h2>${esc(title)}</h2>
@@ -1744,7 +1749,12 @@ export function buildMonthCard(events, { month, now = Date.now() } = {}) {
 // Renders a month card as a self-contained 1200×630 SVG (standard OG image
 // size) in the Tokimeter green theme. Pure string builder — no I/O.
 export function renderMonthCardSvg(card) {
-  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const esc = (s) => String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
   const money = (n) => `~$${(Number(n) || 0).toFixed(2)}`;
   const tok = (n) => {
     n = Number(n) || 0;

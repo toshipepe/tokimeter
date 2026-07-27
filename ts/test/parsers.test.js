@@ -1079,14 +1079,16 @@ test('buildMonthCard: defaults to the current month and survives zero events', (
 
 test('renderMonthCardSvg: self-contained SVG with escaped names and disclaimer', () => {
   const card = buildMonthCard([
-    { ...CARD_EVENTS[0], tool: 'claude<code>&' },
+    { ...CARD_EVENTS[0], tool: `claude<code>&"'` },
     ...CARD_EVENTS.slice(1),
   ], { month: '2026-06' });
+  card.monthLabel = `June "special" <2026> & 'friends'`;
   const svg = renderMonthCardSvg(card);
   assert.ok(svg.startsWith('<svg'));
-  assert.ok(svg.includes('claude&lt;code&gt;&amp;'));
+  assert.ok(svg.includes('claude&lt;code&gt;&amp;&quot;&#39;'));
   assert.ok(!svg.includes('claude<code>'));
-  assert.ok(svg.includes('June 2026'));
+  assert.ok(svg.includes('June &quot;special&quot; &lt;2026&gt; &amp; &#39;friends&#39;'));
+  assert.ok(!svg.includes('June "special" <2026>'));
   assert.ok(svg.includes('~$7.50'));
   assert.ok(svg.includes('not a bill'));
   assert.ok(!svg.includes('href=') && !svg.includes('src=') && !svg.includes('<script'));
