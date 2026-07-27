@@ -307,10 +307,13 @@ engine, storage backends, budget alerts, and a local web dashboard:
 
 A VS Code / Cursor extension shows today's spend in the status bar and a cost
 dashboard inside the editor, from the same local metadata. It's a viewer for
-the local tool; the CLI stays the source of truth. Install it by downloading
-the `.vsix` from [tokimeter.com](https://tokimeter.com/#editor) and running
-**Extensions: Install from VSIX**, or `code --install-extension
-tokimeter-vscode.vsix`. Works in VS Code, Cursor, and other forks.
+the local tool; the CLI stays the source of truth. Download
+[`tokimeter-vscode-0.1.0.vsix`](https://github.com/toshipepe/tokimeter/releases/download/vscode-v0.1.0/tokimeter-vscode-0.1.0.vsix)
+from the immutable
+[`vscode-v0.1.0` GitHub release](https://github.com/toshipepe/tokimeter/releases/tag/vscode-v0.1.0),
+then run **Extensions: Install from VSIX**, or
+`code --install-extension tokimeter-vscode-0.1.0.vsix`. Works in VS Code,
+Cursor, and other forks.
 
 ## Tokimeter Pro
 
