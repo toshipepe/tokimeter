@@ -104,7 +104,7 @@
   },
   "scripts": {
     "vscode:prepublish": "echo 'skip compile'",
-    "package": "npx --yes @vscode/vsce package --out tokimeter-vscode.vsix"
+    "package": "npx --yes @vscode/vsce@3.9.2 package --out tokimeter-vscode.vsix"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0"

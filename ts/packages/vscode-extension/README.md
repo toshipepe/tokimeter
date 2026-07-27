@@ -35,7 +35,7 @@ Install and configure the local proxy first:
 
 ```bash
 npm install -g tokimeter
-tokimeter setup --auto
+"$(npm prefix -g)/bin/tokimeter" setup --auto
 ```
 
 Then run **Tokimeter: Show Cost Dashboard** from the Command Palette. If the
