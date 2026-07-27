@@ -17,4 +17,6 @@ Initial release.
 
 Everything is read from the local Tokimeter proxy (`http://localhost:8788`).
 No prompts or code ever leave your machine — the extension only displays
-usage metadata (tokens, models, costs, project paths).
+usage metadata (tokens, models, costs, project paths). When thinking tips are
+enabled, terminal output is checked transiently for activity markers and is
+never retained.

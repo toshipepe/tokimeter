@@ -87,7 +87,7 @@
         "tokimeter.showTipsDuringWait": {
           "type": "boolean",
           "default": true,
-          "description": "Show rotating cost tips when AI tools are thinking"
+          "description": "Show rotating cost tips when AI tools are thinking. This checks terminal output transiently for activity markers but never retains or transmits it."
         },
         "tokimeter.tipInterval": {
           "type": "number",

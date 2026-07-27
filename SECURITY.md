@@ -10,6 +10,7 @@ lives, and what never leaves your machine.
 | `~/.claude/projects/*.jsonl` | Token usage metadata from Claude Code transcripts: token counts, model names, timestamps, session ids, project paths (`cwd`) | Read-only |
 | `~/.codex/sessions/*.jsonl` | Codex rollout `token_count` events: token counts, model, effort, `cwd` | Read-only |
 | Proxy traffic (opt-in) | If you enable the local proxy for API-key usage, requests to provider APIs pass through `localhost` so usage headers/bodies can be metered | Localhost only |
+| VS Code terminal activity (optional) | With thinking tips enabled, transient output chunks are checked for spinner and activity markers; contents are not retained or transmitted | In-memory only |
 
 `tokimeter report` and `tokimeter limits` use only the read-only paths — no
 proxy, no shims, no writes outside `~/.tokimeter`.
@@ -22,6 +23,9 @@ proxy, no shims, no writes outside `~/.tokimeter`.
 - **Prompt and response content is never stored.** The tracker records usage
   *metadata* only. Transcript files are parsed for their `usage` fields; the
   message text is not persisted by Tokimeter.
+- The optional VS Code thinking-tip detector does not buffer terminal output.
+  Disable `tokimeter.showTipsDuringWait` to turn off its transient activity
+  check.
 
 ## What Tokimeter sends over the network
 
