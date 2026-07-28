@@ -30,7 +30,8 @@ Live-verified readers in this release: Claude Code, Codex CLI, Cursor
 CLI/Desktop Agent, Grok Build, Hermes, opencode 1.17.18, and Cline CLI 3.0.39.
 GitHub Copilot CLI and Aider are fixture-tested but were not completed as live
 requests during release testing. Paid Anthropic/OpenAI API routes are
-test-covered but were not exercised against paid APIs.
+experimental and test-covered but were not exercised against paid APIs or
+reconciled with provider invoices.
 
 `--provider xai` combines direct Grok Build usage with xAI OAuth subscription
 usage through Hermes while preserving each tool in **By tool**. No provider
@@ -41,6 +42,10 @@ account identity or credential is read or stored.
 ```bash
 npm install -g tokimeter && "$(npm prefix -g)/bin/tokimeter" setup --auto
 ```
+
+Run `tokimeter setup --auto --dry-run` to print every planned file/process
+action without changing anything. `tokimeter uninstall` restores prior
+supported-tool settings and removes Tokimeter-generated setup files.
 
 Close and reopen your terminal when setup finishes. Then keep using `codex`,
 `claude`, and your other supported tools normally. Calling the executable by
@@ -76,16 +81,20 @@ tokimeter watch --tool claude    # live feed, per tool
 tokimeter latest --tool codex    # most recent calls
 tokimeter pricing refresh        # pull community price table (~280 models)
 tokimeter doctor                 # optional troubleshooting
-tokimeter uninstall              # removes everything it installed
+tokimeter uninstall              # restores prior configs; removes generated setup files
 ```
 
 ## Honest numbers
 
 `~$X` marks API-equivalent estimates computed from exact local token counts —
-on a subscription that's the value you're extracting, not a bill. Billed
-API-key usage (via the optional localhost proxy) shows without the `~`.
+on a subscription that's the value you're extracting, not a bill. Unknown
+models are excluded from priced totals and shown only as a separate rough
+fallback. Paid localhost-proxy accounting is experimental until reconciled
+against provider invoices.
 A budget percentage is measured against a threshold you configured; it is not
 presented as a provider subscription allowance.
+
+The package declares no `install` or `postinstall` lifecycle script.
 
 MIT licensed. Source, security notes, and issue tracker:
 https://github.com/toshipepe/tokimeter

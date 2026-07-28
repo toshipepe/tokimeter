@@ -20,6 +20,8 @@ import { dirname, join } from 'node:path';
  * @property {number} cached     - USD per 1M cache-read input tokens (0 if N/A)
  * @property {number} [cacheWrite] - USD per 1M cache-write/creation input tokens (defaults to 1.25x input when tokens are reported)
  * @property {string[]} aliases  - alternative names that map to this model
+ * @property {boolean} [custom] - user-supplied local price
+ * @property {boolean} [feed] - community-feed price
  */
 
 // ─── Prices ─────────────────────────────────────────────────────────────────
@@ -204,16 +206,33 @@ const DOWNGRADES = {
  * @param {number} cacheCreationTokens - cache-write tokens (Anthropic reports these separately)
  * @param {{ cachedIncludedInInput?: boolean }} [options] - OpenAI/Google report inputTokens inclusive of
  *   cached tokens; Anthropic reports input/cache-read/cache-write as disjoint buckets.
- * @returns {{ inputCost: number, outputCost: number, totalCost: number, price: ModelPrice | null }}
+ * @returns {{
+ *   inputCost: number,
+ *   outputCost: number,
+ *   totalCost: number,
+ *   roughEstimateCost: number,
+ *   price: ModelPrice | null,
+ *   pricingSource: 'verified' | 'community' | 'custom' | 'fallback',
+ *   authoritative: boolean
+ * }}
  */
 export function priceCall(model, inputTokens = 0, outputTokens = 0, cachedTokens = 0, cacheCreationTokens = 0, { cachedIncludedInInput = true } = {}) {
   const price = lookupPrice(model);
 
   if (!price) {
-    // Unknown — estimate at $2/$8 per 1M
+    // Unknown models are deliberately unpriced in authoritative totals. Keep
+    // the old $2/$8 heuristic only as an explicitly separate rough estimate.
     const inCost = ((inputTokens + cacheCreationTokens) / 1_000_000) * 2.0;
     const outCost = (outputTokens / 1_000_000) * 8.0;
-    return { inputCost: round6(inCost), outputCost: round6(outCost), totalCost: round6(inCost + outCost), price: null };
+    return {
+      inputCost: 0,
+      outputCost: 0,
+      totalCost: 0,
+      roughEstimateCost: round6(inCost + outCost),
+      price: null,
+      pricingSource: 'fallback',
+      authoritative: false,
+    };
   }
 
   const billableInput = cachedIncludedInInput ? Math.max(0, inputTokens - cachedTokens) : inputTokens;
@@ -236,7 +255,10 @@ export function priceCall(model, inputTokens = 0, outputTokens = 0, cachedTokens
     inputCost: round6(inCost),
     outputCost: round6(outCost),
     totalCost: round6(inCost + outCost),
+    roughEstimateCost: 0,
     price,
+    pricingSource: price.custom ? 'custom' : (price.feed ? 'community' : 'verified'),
+    authoritative: true,
   };
 }
 
@@ -277,11 +299,19 @@ function lookupPrice(model) {
  */
 export function getPricingSource(model) {
   const price = getPrice(model);
-  if (!price) return { confidence: 'fallback', source: 'fallback', file: CUSTOM_PRICING_FILE };
-  const source = price.custom ? 'custom' : (price.feed ? 'feed' : 'built-in');
+  if (!price) {
+    return {
+      confidence: 'fallback',
+      source: 'fallback',
+      authoritative: false,
+      file: CUSTOM_PRICING_FILE,
+    };
+  }
+  const source = price.custom ? 'custom' : (price.feed ? 'community' : 'built-in');
   return {
-    confidence: price.custom ? 'custom' : 'known',
+    confidence: price.custom ? 'custom' : (price.feed ? 'community' : 'verified'),
     source,
+    authoritative: true,
     file: price.custom ? CUSTOM_PRICING_FILE : (price.feed ? PRICING_FEED_FILE : ''),
     model: price.model,
   };

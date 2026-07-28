@@ -1,0 +1,69 @@
+name: npm staged publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag matching package.json (for example v0.5.4)"
+        required: true
+        type: string
+      confirmation:
+        description: "Type: stage tokimeter"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  stage:
+    name: Verify and stage npm package
+    if: ${{ inputs.confirmation == 'stage tokimeter' }}
+    runs-on: ubuntu-latest
+    environment: npm-staging
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: Require an existing matching release tag
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          test "$REQUESTED_TAG" = "v$(node -p "require('./ts/packages/proxy/package.json').version")"
+          test "$(git tag --points-at HEAD | grep -Fx "$REQUESTED_TAG")" = "$REQUESTED_TAG"
+
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Install locked Node dependencies
+        working-directory: ts
+        run: npm ci
+
+      - name: Run privacy, Python, and Node gates
+        run: |
+          node scripts/privacy-check.mjs --ci
+          python3 tests/test_basic.py
+          cd ts
+          npm test
+          npm run pack:proxy:dry
+
+      - name: Require npm trusted-publishing support
+        run: |
+          npm --version
+          node -e "const { execFileSync } = require('node:child_process'); const parts = execFileSync('npm', ['--version'], { encoding: 'utf8' }).trim().split('.').map(Number); const supported = parts[0] > 11 || (parts[0] === 11 && (parts[1] > 5 || (parts[1] === 5 && parts[2] >= 1))); if (!supported) throw new Error('npm 11.5.1 or newer is required for trusted publishing');"
+
+      - name: Stage package with npm trusted publishing
+        working-directory: ts/packages/proxy
+        run: npm stage publish

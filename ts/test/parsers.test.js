@@ -982,13 +982,17 @@ const RENDER_FIXTURE = {
   generatedAt: '2026-07-09T00:00:00.000Z',
   windowDays: 7,
   costBasis: 'API-equivalent estimate from exact local token counts; notional (not billed) on Claude/ChatGPT subscriptions',
-  totals: { cost: 12.34, calls: 42, inputTokens: 50000, outputTokens: 8000, cachedTokens: 2500000, cacheCreationTokens: 120000 },
+  totals: { cost: 12.34, roughEstimateCost: 3.21, unpricedCalls: 1, calls: 42, inputTokens: 50000, outputTokens: 8000, cachedTokens: 2500000, cacheCreationTokens: 120000 },
   today: { cost: 1.5, calls: 3 },
   last7Days: { cost: 12.34, calls: 42 },
   cacheReadSavings: 9.87,
   byTool: [{ name: 'claude-code', cost: 10, calls: 40 }, { name: 'codex', cost: 2.34, calls: 2 }],
   byProvider: [{ name: 'Anthropic', cost: 10, calls: 40 }, { name: 'OpenAI', cost: 2.34, calls: 2 }],
   byAccessPath: [{ name: 'xAI OAuth (subscription)', cost: 1, calls: 1 }],
+  pricingSources: [
+    { name: 'verified built-in', cost: 12.34, roughEstimateCost: 0, calls: 41 },
+    { name: 'fallback / unpriced', cost: 0, roughEstimateCost: 3.21, unpricedCalls: 1, calls: 1 },
+  ],
   byModel: [{ name: 'claude-fable-5', cost: 12.34, calls: 42 }],
   byProject: [{ name: '~/proj/<script>', cost: 12.34, calls: 42 }],
   byDay: [{ date: '2026-07-08', cost: 6, calls: 20 }, { date: '2026-07-09', cost: 6.34, calls: 22 }],
@@ -999,7 +1003,8 @@ const RENDER_FIXTURE = {
 test('report --md: renders totals, per-project chargeback table, and estimate disclaimer', () => {
   const md = renderReportMarkdown(RENDER_FIXTURE);
   assert.ok(md.includes('# Tokimeter report — last 7 days'));
-  assert.ok(md.includes('| Total (window) | ~$12.34 | 42 |'));
+  assert.ok(md.includes('| Total (window) | ~$12.34 | ~$3.21 (excluded) | 42 |'));
+  assert.ok(md.includes('## Pricing provenance'));
   assert.ok(md.includes('## By project'));
   assert.ok(md.includes('## By provider'));
   assert.ok(md.includes('## By access path'));
@@ -1018,6 +1023,7 @@ test('report --html: valid standalone page with escaped project names', () => {
   assert.ok(html.includes('By project'));
   assert.ok(html.includes('By provider'));
   assert.ok(html.includes('~$12.34'));
+  assert.ok(html.includes('~$3.21 (excluded)'));
   assert.ok(html.includes('not a bill'));
   assert.ok(!html.includes('src=') && !html.includes('href=')); // self-contained
 });

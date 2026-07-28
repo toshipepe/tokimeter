@@ -64,6 +64,7 @@ const CODEX_HOME = process.env.CODEX_HOME || join(homedir(), '.codex');
 const CODEX_SESSIONS_DIR = join(CODEX_HOME, 'sessions');
 const CODEX_API_PROFILE = join(CODEX_HOME, 'tokimeter.config.toml');
 const CODEX_CHATGPT_PROFILE = join(CODEX_HOME, 'tokimeter-chatgpt.config.toml');
+const CODEX_PROFILES_PREV = join(DATA_DIR, 'codex-profiles-prev.json');
 const GROK_HOME = process.env.GROK_HOME || join(homedir(), '.grok');
 const GROK_UNIFIED_LOG = join(GROK_HOME, 'logs', 'unified.jsonl');
 const GROK_SESSIONS_DIR = join(GROK_HOME, 'sessions');
@@ -447,6 +448,9 @@ async function finishRun(code) {
   console.error(`  💰 Session: ${sessionUsage.calls} calls | $${sessionUsage.cost.toFixed(4)}`);
   console.error(`  📊 Today:   $${(costAfter?.todayCost || 0).toFixed(2)} (${costAfter?.todayCalls || 0} calls)`);
   console.error(`  📊 Total:   $${(costAfter?.totalCost || 0).toFixed(2)} (${costAfter?.totalCalls || 0} calls)`);
+  if ((costAfter?.roughEstimateCost || 0) > 0) {
+    console.error(`  📎 Unpriced: rough ~$${costAfter.roughEstimateCost.toFixed(2)} excluded (${costAfter.roughEstimateCalls || 0} calls)`);
+  }
 
   // Show top tip if available
   const tips = await fetchTips();
@@ -638,13 +642,25 @@ async function waitForProxyToStop() {
 async function setupTool(setupArgs) {
   const target = setupArgs.find(arg => !arg.startsWith('-')) || 'all';
   const auto = setupArgs.includes('--auto') || setupArgs.includes('--shims');
+  const dryRun = setupArgs.includes('--dry-run');
   const claudeSpinner = setupArgs.includes('--spinner') || process.env.TOKIMETER_CLAUDE_SPINNER === '1';
   let claudeStatus = null;
+  const supportedTargets = ['all', 'codex', 'codex-api', 'codex-chatgpt', 'claude', 'cursor', 'grok'];
   const allTargets = target === 'all'
     ? ['codex', 'claude']
     : target === 'codex-api' || target === 'codex-chatgpt'
       ? ['codex']
       : [target];
+
+  if (!supportedTargets.includes(target)) {
+    console.error(`  ❌ Unknown setup target: ${target}`);
+    console.error(`     Use: tm setup --auto, tm setup claude --auto, tm setup codex --auto, tm setup cursor, tm setup grok, tm setup codex-api, or tm setup codex-chatgpt`);
+    process.exitCode = 1;
+    return;
+  }
+
+  printSetupPlan(buildSetupPlan({ target, auto, claudeSpinner }), { dryRun });
+  if (dryRun) return;
 
   if (target === 'all' || target === 'codex') {
     await ensureCodexProfiles();
@@ -688,12 +704,6 @@ async function setupTool(setupArgs) {
     }
   }
 
-  if (!['all', 'codex', 'codex-api', 'codex-chatgpt', 'claude', 'cursor', 'grok'].includes(target)) {
-    console.error(`  ❌ Unknown setup target: ${target}`);
-    console.error(`     Use: tm setup --auto, tm setup claude --auto, tm setup codex --auto, tm setup cursor, tm setup codex-api, or tm setup codex-chatgpt`);
-    process.exit(1);
-  }
-
   if (auto) {
     installShims(allTargets);
     const ptyStatus = ensureNodePtySpawnHelperExecutable();
@@ -711,6 +721,58 @@ async function setupTool(setupArgs) {
     // Cursor needs no shim — the status line + hook route through cursor-agent itself.
     console.log(`  Tip: run "tokimeter setup ${target} --auto" to make normal ${allTargets.join('/')} commands route through Tokimeter.`);
   }
+  console.log(`  Revert these setup changes with: tokimeter uninstall`);
+}
+
+function buildSetupPlan({ target, auto, claudeSpinner }) {
+  const actions = [];
+  const add = (action, path, detail = '') => actions.push({ action, path, detail });
+
+  if (target === 'all' || target === 'codex' || target === 'codex-api' || target === 'codex-chatgpt') {
+    add('back up if needed', CODEX_PROFILES_PREV, 'prior Codex profile contents, once');
+    add('write', CODEX_API_PROFILE, 'Tokimeter localhost API-key profile');
+    add('write', CODEX_CHATGPT_PROFILE, 'subscription-mode usage note');
+  }
+  if (target === 'all' || target === 'claude') {
+    add('back up if needed', CLAUDE_STATUSLINE_PREV, 'existing status line and spinner settings');
+    add('write', CLAUDE_STATUSLINE_SCRIPT, 'local metadata-only status-line script');
+    add('update', CLAUDE_SETTINGS_FILE, `Tokimeter status line${claudeSpinner ? ' and spinner hints' : ''}`);
+  }
+  if (target === 'cursor') {
+    add('back up if needed', CURSOR_STATUSLINE_PREV, 'existing Cursor status line');
+    add('write', CURSOR_STATUSLINE_SCRIPT, 'local metadata-only status-line script');
+    add('update', CURSOR_CLI_CONFIG, 'Tokimeter status line');
+    add('update', CURSOR_HOOKS_FILE, 'additive stop/subagentStop usage hooks');
+  }
+  if (target === 'grok') {
+    add('write', GROK_HOOK_FILE, 'Tokimeter-owned Stop hook for local budget notifications');
+  }
+  if (auto) {
+    const shimTargets = target === 'all'
+      ? ['tokimeter', 'tm', 'codex', 'claude']
+      : ['tokimeter', 'tm', ...(target === 'codex' || target === 'codex-api' || target === 'codex-chatgpt' ? ['codex'] : []), ...(target === 'claude' ? ['claude'] : [])];
+    for (const command of shimTargets) add('write', join(SHIM_BIN_DIR, command), 'generated shell shim');
+    const rcFile = detectShellRcFile();
+    if (rcFile) add('update if needed', rcFile, `append marked PATH block for ${SHIM_BIN_DIR}`);
+    add('inspect/repair if needed', 'optional node-pty spawn helper', 'executable bit only; no download');
+    add('start if needed', PROXY_URL, 'localhost process for post-setup verification');
+  }
+  return actions;
+}
+
+function printSetupPlan(actions, { dryRun = false } = {}) {
+  console.log(`\n  Tokimeter Setup ${dryRun ? 'Dry Run' : 'Plan'}`);
+  console.log(`  ──────────────────────────────────────────────`);
+  if (actions.length === 0) {
+    console.log(`  No file changes planned.`);
+  } else {
+    for (const item of actions) {
+      console.log(`  • ${item.action}: ${item.path}${item.detail ? ` — ${item.detail}` : ''}`);
+    }
+  }
+  console.log(`  ──────────────────────────────────────────────`);
+  console.log(`  ${dryRun ? 'No files, processes, or settings were changed.' : 'Applying this plan now.'}`);
+  console.log(`  Revert setup changes with: tokimeter uninstall\n`);
 }
 
 async function runAutoSetupPostflight({ targets, ptyStatus, rcFile, claudeStatus }) {
@@ -1064,7 +1126,7 @@ function formatHudLine({ mode, todayCost, todayCalls, savings, latest, tip, five
   }
   if (mode === 'latest') {
     return latest
-      ? \`Tokimeter Claude latest \${latest.model || 'unknown'} · $\${Number(latest.totalCost || 0).toFixed(4)} · today \${todayCost}\`
+      ? \`Tokimeter Claude latest \${latest.model || 'unknown'} · \${Number(latest.roughEstimateCost || 0) > 0 ? 'unpriced (rough ~$' + Number(latest.roughEstimateCost).toFixed(4) + ' excluded)' : '$' + Number(latest.totalCost || 0).toFixed(4)} · today \${todayCost}\`
       : \`Tokimeter Claude today \${todayCost} · waiting for Claude calls\`;
   }
   const saved = savings.saved > 0 ? \` · ~$\${savings.saved.toFixed(2)} under baseline\` : '';
@@ -1985,7 +2047,7 @@ function codexInlineRecommendation(call) {
   const pricingConfidence = call.pricingConfidence || getPricingSource(model).confidence;
 
   if (pricingConfidence === 'fallback') {
-    return 'Cost is estimated with fallback pricing; add current model pricing before treating dollars as exact.';
+    return 'Model is unpriced; any rough fallback is excluded from priced totals. Add a current custom price to include it.';
   }
 
   if (model.includes('mini') || effort === 'low') {
@@ -2009,7 +2071,7 @@ function claudeInlineRecommendation(call) {
   const pricingConfidence = call.pricingConfidence || getPricingSource(call.model).confidence;
 
   if (pricingConfidence === 'fallback') {
-    return 'Cost is estimated with fallback pricing; add current Claude pricing before treating dollars as exact.';
+    return 'Claude model is unpriced; any rough fallback is excluded from priced totals. Add a current custom price to include it.';
   }
 
   if (model.includes('haiku')) {
@@ -2599,7 +2661,7 @@ async function runPricingCommand(pricingArgs) {
     try {
       const result = await refreshPricingFeed();
       console.log(`  ✓ Pricing feed refreshed: ${result.count} models cached at ${result.file}`);
-      console.log(`  Precedence: your custom prices > Tokimeter built-in (verified) > feed.`);
+      console.log(`  Precedence: your custom prices > Tokimeter verified built-ins > community feed.`);
     } catch (e) {
       console.error(`  ❌ Pricing feed refresh failed: ${e.message}`);
       console.error(`  Built-in and custom pricing still work offline.`);
@@ -2625,7 +2687,7 @@ async function runPricingCommand(pricingArgs) {
     console.log(`\n  Tokimeter Pricing${provider ? ` · ${provider}` : ''}`);
     console.log(`  ──────────────────────────────────────────────`);
     for (const model of models) {
-      const marker = model.custom ? 'custom' : (model.feed ? 'feed' : 'built-in');
+      const marker = model.custom ? 'custom' : (model.feed ? 'community-feed' : 'verified-built-in');
       console.log(`  ${model.provider.padEnd(10)} ${model.model.padEnd(32)} in $${model.input}/1M · out $${model.output}/1M · cached $${model.cached}/1M · ${marker}`);
     }
     console.log(`\n  Custom pricing file: ${getPricingSource('__missing__').file}`);
@@ -2642,7 +2704,8 @@ async function runPricingCommand(pricingArgs) {
     }
     const source = getPricingSource(model);
     if (source.confidence === 'fallback') {
-      console.log(`  ${model}: fallback pricing ($2/$8 per 1M). Add custom pricing before treating cost as exact.`);
+      console.log(`  ${model}: unpriced. A rough $2/$8-per-1M fallback is shown separately and excluded from priced totals.`);
+      console.log(`  Add custom pricing to include this model in priced totals.`);
     } else {
       console.log(`  ${model}: ${source.confidence} pricing via ${source.source}${source.model ? ` (${source.model})` : ''}`);
     }
@@ -3044,6 +3107,10 @@ function isShimPathActive() {
 
 function uninstallAutoSetup() {
   let removed = 0;
+  const codexRestore = uninstallCodexProfiles();
+  if (codexRestore.detail) {
+    console.log(`  ${codexRestore.changed ? '✓' : '⚠️'} ${codexRestore.detail}`);
+  }
   const claudeRestore = uninstallClaudeStatusline();
   if (claudeRestore.changed) {
     console.log(`  ✓ ${claudeRestore.detail}`);
@@ -3140,7 +3207,12 @@ function uninstallCursorInline() {
         details.push(`Cursor usage hook removed from ${CURSOR_HOOKS_FILE}`);
       }
     }
-    return { changed, detail: details.join('; ') };
+    for (const file of [CURSOR_STATUSLINE_SCRIPT, CURSOR_STATUSLINE_PREV]) {
+      if (!existsSync(file)) continue;
+      unlinkSync(file);
+      changed = true;
+    }
+    return { changed, detail: details.join('; ') || (changed ? 'Removed generated Cursor status-line files' : '') };
   } catch (err) {
     return { changed, detail: `⚠️ Cursor cleanup incomplete: ${err.message}` };
   }
@@ -3215,6 +3287,18 @@ async function ensureCodexProfiles() {
   if (!existsSync(CODEX_HOME)) {
     mkdirSync(CODEX_HOME, { recursive: true });
   }
+  ensureDataDir();
+
+  if (!existsSync(CODEX_PROFILES_PREV)) {
+    const previous = {};
+    for (const file of [CODEX_API_PROFILE, CODEX_CHATGPT_PROFILE]) {
+      previous[file] = existsSync(file)
+        ? { existed: true, content: readFileSync(file, 'utf8') }
+        : { existed: false };
+    }
+    writeFileSync(CODEX_PROFILES_PREV, JSON.stringify(previous, null, 2) + '\n');
+    try { chmodSync(CODEX_PROFILES_PREV, 0o600); } catch {}
+  }
 
   const apiProfile = `# Generated by Tokimeter.
 # API-key mode. Use with: codex --profile tokimeter "your task"
@@ -3240,6 +3324,39 @@ wire_api = "responses"
 
   writeFileSync(CODEX_API_PROFILE, apiProfile);
   writeFileSync(CODEX_CHATGPT_PROFILE, chatgptProfile);
+}
+
+function uninstallCodexProfiles() {
+  try {
+    let changed = false;
+    if (existsSync(CODEX_PROFILES_PREV)) {
+      const previous = JSON.parse(readFileSync(CODEX_PROFILES_PREV, 'utf8')) || {};
+      for (const file of [CODEX_API_PROFILE, CODEX_CHATGPT_PROFILE]) {
+        const saved = previous[file];
+        if (saved?.existed) {
+          mkdirSync(dirname(file), { recursive: true });
+          writeFileSync(file, String(saved.content || ''));
+          changed = true;
+        } else if (existsSync(file) && readFileSync(file, 'utf8').startsWith('# Generated by Tokimeter.')) {
+          unlinkSync(file);
+          changed = true;
+        }
+      }
+      unlinkSync(CODEX_PROFILES_PREV);
+      changed = true;
+      return { changed, detail: 'Restored prior Codex profiles' };
+    }
+
+    for (const file of [CODEX_API_PROFILE, CODEX_CHATGPT_PROFILE]) {
+      if (!existsSync(file)) continue;
+      if (!readFileSync(file, 'utf8').startsWith('# Generated by Tokimeter.')) continue;
+      unlinkSync(file);
+      changed = true;
+    }
+    return { changed, detail: changed ? 'Removed generated Codex profiles' : '' };
+  } catch (err) {
+    return { changed: false, detail: `Could not restore Codex profiles: ${err.message}` };
+  }
 }
 
 async function trackCodexSummary(text, meta) {
@@ -3428,7 +3545,11 @@ async function showStatus() {
     console.log(`\n  ✓ Tokimeter Proxy: ${healthy ? 'RUNNING' : 'OFFLINE'}`);
     console.log(`    URL: ${PROXY_URL}`);
     console.log(`    Today: $${(summary?.todayCost || 0).toFixed(2)} (${summary?.todayCalls || 0} calls)`);
-    console.log(`    Total: $${(summary?.totalCost || 0).toFixed(2)} (${summary?.totalCalls || 0} calls)\n`);
+    console.log(`    Total: $${(summary?.totalCost || 0).toFixed(2)} (${summary?.totalCalls || 0} calls)`);
+    if ((summary?.roughEstimateCost || 0) > 0) {
+      console.log(`    Unknown models: rough ~$${summary.roughEstimateCost.toFixed(2)} excluded (${summary.roughEstimateCalls || 0} calls)`);
+    }
+    console.log('');
   } else {
     console.log(`\n  ❌ Proxy: OFFLINE`);
     console.log(`    Start it with: tm start\n`);
@@ -3482,6 +3603,7 @@ async function runWatch(watchArgs) {
     const todayCalls = scoped ? scoped.todayCalls : (summary?.todayCalls || 0);
     const totalCost = scoped ? scoped.totalCost : (summary?.totalCost || 0);
     const totalCalls = scoped ? scoped.totalCalls : (summary?.totalCalls || 0);
+    const totalRoughEstimateCost = scoped ? scoped.roughEstimateCost : (summary?.roughEstimateCost || 0);
     const todayEstCost = Math.min(todayCost, callsSummary.todayEstCost);
     const latest = Array.isArray(calls) && calls.length > 0 ? calls[0] : null;
     const tip = toolFilter
@@ -3495,6 +3617,7 @@ async function runWatch(watchArgs) {
       todayCalls,
       totalCost,
       totalCalls,
+      totalRoughEstimateCost,
       latestId,
       breakdown,
       sessionBreakdown,
@@ -3508,7 +3631,8 @@ async function runWatch(watchArgs) {
     const scopeLabel = toolFilter ? ` [${toolFilter}]` : '';
     const totalLabel = toolFilter ? 'Recent total' : 'Total';
     const totalText = scoped ? formatCostWithBasis(totalCost, scoped.totalEstCost) : `$${totalCost.toFixed(4)}`;
-    console.log(`  ${new Date().toLocaleTimeString()}${scopeLabel}  Today ${formatCostWithBasis(todayCost, todayEstCost)} / ${todayCalls} calls · ${totalLabel} ${totalText} / ${totalCalls} calls`);
+    const roughText = totalRoughEstimateCost > 0 ? ` · unknown rough ~$${totalRoughEstimateCost.toFixed(4)} excluded` : '';
+    console.log(`  ${new Date().toLocaleTimeString()}${scopeLabel}  Today ${formatCostWithBasis(todayCost, todayEstCost)} / ${todayCalls} calls · ${totalLabel} ${totalText} / ${totalCalls} calls${roughText}`);
     console.log(`  Tip: ${tip}`);
     if (debug) {
       console.log(`  Import: ${codexImported} new Codex metadata events, ${claudeImported} new Claude transcript events`);
@@ -3521,7 +3645,7 @@ async function runWatch(watchArgs) {
         const reasoning = latest.reasoningTokens ? ` / ${latest.reasoningTokens} reasoning` : '';
         const context = formatCallContext(latest);
         const labels = formatCallLabels(latest);
-        console.log(`  Latest: ${latest.tool || 'llm'}${context ? ` · ${context}` : ''} · ${latest.model || 'unknown'}${effort} · ${labels} · ${latest.inputTokens || 0} in / ${latest.outputTokens || 0} out${reasoning} · $${(latest.totalCost || 0).toFixed(4)}`);
+        console.log(`  Latest: ${latest.tool || 'llm'}${context ? ` · ${context}` : ''} · ${latest.model || 'unknown'}${effort} · ${labels} · ${latest.inputTokens || 0} in / ${latest.outputTokens || 0} out${reasoning} · ${formatCallCost(latest)}`);
       }
     } else if (toolFilter) {
       console.log(`  No ${toolFilter} usage found in the most recent 500 tracked calls.`);
@@ -3890,6 +4014,18 @@ function collectLocalUsageEvents({ maxAgeMs, toolFilter = null, providerFilter =
   }
 
   for (const event of events) {
+    event.pricingConfidence = event.pricingConfidence || getPricingSource(event.model || '').confidence;
+
+    // Calls recorded by older Tokimeter releases may contain the unknown-model
+    // $2/$8 heuristic in totalCost. Migrate that value in memory only: reports
+    // exclude it from priced totals and show it as a separate rough estimate.
+    if (event.pricingConfidence === 'fallback' && Number(event.totalCost) > 0) {
+      event.roughEstimateCost = Number(event.roughEstimateCost) || Number(event.totalCost);
+      event.totalCost = 0;
+      event.inputCost = 0;
+      event.outputCost = 0;
+    }
+
     // A tool-reported billed cost (e.g. Hermes actual_cost_usd) wins over
     // our estimate.
     if (Number(event.totalCost) > 0) continue;
@@ -3902,7 +4038,11 @@ function collectLocalUsageEvents({ maxAgeMs, toolFilter = null, providerFilter =
       event.cacheCreationTokens || 0,
       { cachedIncludedInInput: !disjoint }
     );
+    event.inputCost = cost.inputCost;
+    event.outputCost = cost.outputCost;
     event.totalCost = cost.totalCost;
+    event.roughEstimateCost = cost.roughEstimateCost || 0;
+    event.pricingConfidence = cost.pricingSource;
   }
   return events
     .filter((event) => !providerFilter || normalizeProviderFilter(event.provider) === providerFilter)
@@ -4009,7 +4149,11 @@ async function runCursorCapture() {
     // read. Cursor reports disjoint buckets (input excludes cache read/write).
     const priced = priceCall(record.model, record.inputTokens, record.outputTokens,
       record.cachedTokens, record.cacheCreationTokens, { cachedIncludedInInput: false });
-    if (priced && Number(priced.totalCost) > 0) record.totalCost = priced.totalCost;
+    if (priced) {
+      record.totalCost = priced.totalCost;
+      record.roughEstimateCost = priced.roughEstimateCost || 0;
+      record.pricingConfidence = priced.pricingSource;
+    }
 
     ensureDataDir();
     appendFileSync(CURSOR_USAGE_LOG, JSON.stringify(record) + '\n');
@@ -5020,9 +5164,9 @@ function buildReport(events, { days, toolFilter, providerFilter, activities = []
   const todayMs = todayStart.getTime();
   const weekMs = Date.now() - 7 * 86400 * 1000;
 
-  const totals = { cost: 0, calls: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, cacheCreationTokens: 0, reasoningTokens: 0 };
-  const today = { cost: 0, calls: 0 };
-  const week = { cost: 0, calls: 0 };
+  const totals = { cost: 0, roughEstimateCost: 0, unpricedCalls: 0, calls: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, cacheCreationTokens: 0, reasoningTokens: 0 };
+  const today = { cost: 0, roughEstimateCost: 0, unpricedCalls: 0, calls: 0 };
+  const week = { cost: 0, roughEstimateCost: 0, unpricedCalls: 0, calls: 0 };
   const byTool = new Map();
   const byProvider = new Map();
   const byAccessPath = new Map();
@@ -5030,19 +5174,26 @@ function buildReport(events, { days, toolFilter, providerFilter, activities = []
   const byProject = new Map();
   const byDay = new Map();
   const bySession = new Map();
+  const byPricingSource = new Map();
   const reasoningByDay = new Map();
   let cacheReadSavings = 0;
 
-  const bump = (map, key, cost) => {
-    const current = map.get(key) || { cost: 0, calls: 0 };
+  const bump = (map, key, cost, roughEstimateCost = 0) => {
+    const current = map.get(key) || { cost: 0, roughEstimateCost: 0, unpricedCalls: 0, calls: 0 };
     current.cost += cost;
+    current.roughEstimateCost += roughEstimateCost;
+    if (roughEstimateCost > 0) current.unpricedCalls += 1;
     current.calls += 1;
     map.set(key, current);
   };
 
   for (const event of events) {
-    const cost = event.totalCost || 0;
+    const cost = Number(event.totalCost) || 0;
+    const roughEstimateCost = Math.max(0, Number(event.roughEstimateCost) || 0);
+    const pricingSource = normalizePricingConfidence(event.pricingConfidence || getPricingSource(event.model || '').confidence);
     totals.cost += cost;
+    totals.roughEstimateCost += roughEstimateCost;
+    if (roughEstimateCost > 0) totals.unpricedCalls += 1;
     totals.calls += 1;
     totals.inputTokens += event.inputTokens || 0;
     totals.outputTokens += event.outputTokens || 0;
@@ -5050,20 +5201,31 @@ function buildReport(events, { days, toolFilter, providerFilter, activities = []
     totals.cacheCreationTokens += event.cacheCreationTokens || 0;
     totals.reasoningTokens += event.reasoningTokens || 0;
 
-    if (event.timestamp >= todayMs) { today.cost += cost; today.calls += 1; }
-    if (event.timestamp >= weekMs) { week.cost += cost; week.calls += 1; }
+    if (event.timestamp >= todayMs) {
+      today.cost += cost;
+      today.roughEstimateCost += roughEstimateCost;
+      if (roughEstimateCost > 0) today.unpricedCalls += 1;
+      today.calls += 1;
+    }
+    if (event.timestamp >= weekMs) {
+      week.cost += cost;
+      week.roughEstimateCost += roughEstimateCost;
+      if (roughEstimateCost > 0) week.unpricedCalls += 1;
+      week.calls += 1;
+    }
 
-    bump(byTool, event.tool || 'unknown', cost);
-    bump(byProvider, providerDisplayName(event.provider), cost);
+    bump(byTool, event.tool || 'unknown', cost, roughEstimateCost);
+    bump(byProvider, providerDisplayName(event.provider), cost, roughEstimateCost);
     const accessPath = event.accessPath || (event.tool === 'grok' && event.provider === 'xai' ? 'Grok Build (direct)' : null);
-    if (accessPath) bump(byAccessPath, accessPath, cost);
-    bump(byModel, `${event.model || 'unknown'}${event.effort ? ` ${event.effort}` : ''}`, cost);
-    bump(byProject, event.cwd ? shortenPath(String(event.cwd)) : '(unknown project)', cost);
+    if (accessPath) bump(byAccessPath, accessPath, cost, roughEstimateCost);
+    bump(byModel, `${event.model || 'unknown'}${event.effort ? ` ${event.effort}` : ''}`, cost, roughEstimateCost);
+    bump(byProject, event.cwd ? shortenPath(String(event.cwd)) : '(unknown project)', cost, roughEstimateCost);
     const day = localDateKey(event.timestamp);
-    bump(byDay, day, cost);
+    bump(byDay, day, cost, roughEstimateCost);
+    bump(byPricingSource, pricingSource, cost, roughEstimateCost);
     if (event.sessionId) {
       const sessionLabel = `${event.tool || 'llm'} · ${event.cwd ? shortenPath(String(event.cwd)) : '(unknown)'} · ${String(event.sessionId).slice(0, 8)}`;
-      bump(bySession, sessionLabel, cost);
+      bump(bySession, sessionLabel, cost, roughEstimateCost);
     }
     if (event.reasoningTokens) {
       reasoningByDay.set(day, (reasoningByDay.get(day) || 0) + event.reasoningTokens);
@@ -5077,18 +5239,25 @@ function buildReport(events, { days, toolFilter, providerFilter, activities = []
   }
 
   const toSorted = (map) => [...map.entries()]
-    .map(([name, value]) => ({ name, cost: round2(value.cost), calls: value.calls }))
-    .sort((a, b) => b.cost - a.cost);
+    .map(([name, value]) => ({
+      name,
+      cost: round2(value.cost),
+      roughEstimateCost: round2(value.roughEstimateCost),
+      unpricedCalls: value.unpricedCalls,
+      calls: value.calls,
+    }))
+    .sort((a, b) => b.cost - a.cost || b.roughEstimateCost - a.roughEstimateCost);
 
   return {
     generatedAt: new Date().toISOString(),
     windowDays: days,
     toolFilter: toolFilter || 'all',
     providerFilter: providerFilter || 'all',
-    costBasis: 'API-equivalent estimate from exact local token counts; notional (not billed) on Claude/ChatGPT subscriptions',
-    totals: { ...totals, cost: round2(totals.cost) },
-    today: { ...today, cost: round2(today.cost) },
-    last7Days: { ...week, cost: round2(week.cost) },
+    costBasis: 'priced totals use provider-reported costs or sourced API rates; subscription values are API-equivalent, not invoices; unknown-model fallback is excluded and shown separately',
+    totals: { ...totals, cost: round2(totals.cost), roughEstimateCost: round2(totals.roughEstimateCost) },
+    today: { ...today, cost: round2(today.cost), roughEstimateCost: round2(today.roughEstimateCost) },
+    last7Days: { ...week, cost: round2(week.cost), roughEstimateCost: round2(week.roughEstimateCost) },
+    pricingSources: toSorted(byPricingSource),
     cacheReadSavings: round2(cacheReadSavings),
     insights: buildInsights(events, totals),
     delegation: buildDelegationReport(events),
@@ -5103,9 +5272,25 @@ function buildReport(events, { days, toolFilter, providerFilter, activities = []
     byProject: toSorted(byProject),
     bySession: toSorted(bySession).slice(0, 10),
     byDay: [...byDay.entries()]
-      .map(([date, value]) => ({ date, cost: round2(value.cost), calls: value.calls, reasoningTokens: reasoningByDay.get(date) || 0 }))
+      .map(([date, value]) => ({
+        date,
+        cost: round2(value.cost),
+        roughEstimateCost: round2(value.roughEstimateCost),
+        unpricedCalls: value.unpricedCalls,
+        calls: value.calls,
+        reasoningTokens: reasoningByDay.get(date) || 0,
+      }))
       .sort((a, b) => a.date.localeCompare(b.date)),
   };
+}
+
+function normalizePricingConfidence(value) {
+  if (value === 'known' || value === 'built-in') return 'verified built-in';
+  if (value === 'verified') return 'verified built-in';
+  if (value === 'feed' || value === 'community') return 'community feed';
+  if (value === 'custom') return 'custom local';
+  if (value === 'reported') return 'provider/tool reported';
+  return 'fallback / unpriced';
 }
 
 function localDateKey(timestamp) {
@@ -5223,6 +5408,12 @@ function buildInsights(events, totals) {
 
 function printReport(report) {
   const money = (n) => `$${n.toFixed(2)}`;
+  const rowCost = (row) => {
+    const priced = `${money(row.cost)} · ${row.calls} calls`;
+    return row.roughEstimateCost > 0
+      ? `${priced} · rough ~${money(row.roughEstimateCost)} excluded (${row.unpricedCalls} unpriced)`
+      : priced;
+  };
   const line = (label, value) => {
     const name = label.length > 25 ? `${label.slice(0, 24)}…` : label;
     console.log(`  ${name.padEnd(26)}${value}`);
@@ -5249,40 +5440,47 @@ function printReport(report) {
     return;
   }
 
-  line('Total', `${money(report.totals.cost)} · ${report.totals.calls} calls`);
+  line('Priced total', `${money(report.totals.cost)} · ${report.totals.calls} calls`);
+  if (report.totals.roughEstimateCost > 0) {
+    line('Unknown-model rough', `~${money(report.totals.roughEstimateCost)} · ${report.totals.unpricedCalls} calls · excluded from priced total`);
+  }
   line('Today', `${money(report.today.cost)} · ${report.today.calls} calls`);
   line('Last 7 days', `${money(report.last7Days.cost)} · ${report.last7Days.calls} calls`);
   line('Tokens', `${fmtTokens(report.totals.inputTokens)} in · ${fmtTokens(report.totals.outputTokens)} out · ${fmtTokens(report.totals.cachedTokens)} cache read · ${fmtTokens(report.totals.cacheCreationTokens)} cache write`);
   if (report.totals.reasoningTokens > 0) line('Reasoning tokens', fmtTokens(report.totals.reasoningTokens));
   if (report.cacheReadSavings > 0) line('Saved by prompt caching', `~${money(report.cacheReadSavings)}`);
 
+  section('Pricing provenance');
+  for (const row of report.pricingSources) line(row.name, rowCost(row));
+
   section('By tool');
-  for (const row of report.byTool) line(row.name, `${money(row.cost)} · ${row.calls} calls`);
+  for (const row of report.byTool) line(row.name, rowCost(row));
 
   section('By provider');
-  for (const row of report.byProvider) line(row.name, `${money(row.cost)} · ${row.calls} calls`);
+  for (const row of report.byProvider) line(row.name, rowCost(row));
 
   if (report.byAccessPath.length > 0) {
     section('By access path');
-    for (const row of report.byAccessPath) line(row.name, `${money(row.cost)} · ${row.calls} calls`);
+    for (const row of report.byAccessPath) line(row.name, rowCost(row));
   }
 
   section('By model');
-  for (const row of report.byModel.slice(0, 10)) line(row.name, `${money(row.cost)} · ${row.calls} calls`);
+  for (const row of report.byModel.slice(0, 10)) line(row.name, rowCost(row));
 
   section('By project');
-  for (const row of report.byProject.slice(0, 10)) line(row.name, `${money(row.cost)} · ${row.calls} calls`);
+  for (const row of report.byProject.slice(0, 10)) line(row.name, rowCost(row));
 
   if (Array.isArray(report.bySession) && report.bySession.length > 0) {
     section('By session (top 10)');
-    for (const row of report.bySession) line(row.name, `${money(row.cost)} · ${row.calls} calls`);
+    for (const row of report.bySession) line(row.name, rowCost(row));
   }
 
   section('By day');
   const maxDay = Math.max(...report.byDay.map(d => d.cost), 0.01);
   for (const row of report.byDay.slice(-14)) {
     const bar = '█'.repeat(Math.max(1, Math.round((row.cost / maxDay) * 24)));
-    console.log(`  ${row.date}  ${bar} ${money(row.cost)}`);
+    const rough = row.roughEstimateCost > 0 ? ` · rough ~${money(row.roughEstimateCost)} excluded` : '';
+    console.log(`  ${row.date}  ${bar} ${money(row.cost)}${rough}`);
   }
 
   const ins = report.insights || {};
@@ -5308,8 +5506,8 @@ function printReport(report) {
     }
   }
 
-  console.log(`\n  Costs are API-equivalent estimates from exact local token counts.`);
-  console.log(`  On a Claude/ChatGPT subscription this is value delivered, not a bill.`);
+  console.log(`\n  Priced totals use provider/tool-reported costs or sourced API rates.`);
+  console.log(`  Subscription values are API-equivalent, not invoices; unknown models stay separate.`);
   console.log(`  Live tracking + budgets: tokimeter setup --auto\n`);
 }
 
@@ -5447,6 +5645,8 @@ async function importHermesUsage(importArgs, { quiet = false } = {}) {
       event.inputCost = cost.inputCost;
       event.outputCost = cost.outputCost;
       event.totalCost = cost.totalCost;
+      event.roughEstimateCost = cost.roughEstimateCost || 0;
+      event.pricingConfidence = cost.pricingSource;
     }
     const result = await postJSON(`${PROXY_URL}/api/track`, event);
     if (!result?.ok) failed++;
@@ -5580,17 +5780,31 @@ function summarizeCalls(calls) {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayMs = todayStart.getTime();
-  const summary = { todayCost: 0, todayCalls: 0, totalCost: 0, totalCalls: 0, todayEstCost: 0, totalEstCost: 0 };
+  const summary = {
+    todayCost: 0,
+    todayCalls: 0,
+    totalCost: 0,
+    totalCalls: 0,
+    todayEstCost: 0,
+    totalEstCost: 0,
+    todayRoughEstimateCost: 0,
+    roughEstimateCost: 0,
+    roughEstimateCalls: 0,
+  };
 
   for (const call of Array.isArray(calls) ? calls : []) {
     const cost = Number(call.totalCost) || 0;
+    const rough = Math.max(0, Number(call.roughEstimateCost) || 0);
     const estimated = isEstimatedCall(call);
     summary.totalCost += cost;
     summary.totalCalls += 1;
+    summary.roughEstimateCost += rough;
+    if (rough > 0) summary.roughEstimateCalls += 1;
     if (estimated) summary.totalEstCost += cost;
     if ((Number(call.timestamp) || 0) >= todayMs) {
       summary.todayCost += cost;
       summary.todayCalls += 1;
+      summary.todayRoughEstimateCost += rough;
       if (estimated) summary.todayEstCost += cost;
     }
   }
@@ -5719,8 +5933,16 @@ function tokenConfidenceLabel(confidence) {
 
 function pricingConfidenceLabel(confidence) {
   if (confidence === 'custom') return 'custom pricing';
-  if (confidence === 'fallback') return 'fallback pricing';
-  return 'built-in pricing';
+  if (confidence === 'community' || confidence === 'feed') return 'community pricing';
+  if (confidence === 'reported') return 'reported cost';
+  if (confidence === 'fallback') return 'unpriced';
+  return 'verified built-in pricing';
+}
+
+function formatCallCost(call) {
+  const rough = Math.max(0, Number(call?.roughEstimateCost) || 0);
+  if (rough > 0) return `rough ~$${rough.toFixed(4)} excluded`;
+  return `$${(Number(call?.totalCost) || 0).toFixed(4)}`;
 }
 
 function confidenceForSource(source) {
@@ -5910,7 +6132,7 @@ function printHelp() {
     tokimeter watch              Quiet local spend/model change feed
     tokimeter watch --tool claude|codex  Same feed scoped to one tool
     tokimeter latest             Show latest tracked calls (add --tool claude|codex)
-    tokimeter pricing list       List built-in and custom model pricing
+    tokimeter pricing list       List built-in, community, and custom pricing
     tokimeter pricing source ... Explain pricing source for a model
     tokimeter config list        Show local Tokimeter settings
     tokimeter codex-import       Import recent Codex rollout token metadata
@@ -5924,10 +6146,11 @@ function printHelp() {
     tokimeter logout             Disable sync and remove the stored device key
     tokimeter setup --auto       One-command local install for Codex + Claude
     tokimeter setup [tool]       Configure a specific local tool profile
+    tokimeter setup --dry-run    Print exact setup files/actions; change nothing
     tokimeter setup cursor       Cursor CLI: Tokimeter status line + exact per-turn usage capture (hook)
     tokimeter setup grok         Grok Build: desktop budget alarm on turn end (Stop hook)
     tokimeter setup [tool] --auto Install shims for a specific tool
-    tokimeter uninstall          Remove generated codex/claude shims
+    tokimeter uninstall          Restore prior configs and remove generated setup files
     tokimeter doctor             Diagnose local setup\n    tokimeter repair             Restart proxy, regenerate shims/HUD, refresh pricing
     tokimeter ready              Simple "can I use codex/claude now?" check
 

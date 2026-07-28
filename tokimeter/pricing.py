@@ -184,8 +184,11 @@ class Pricer:
 
     def __init__(self, custom_prices: dict[str, ModelPrice] | None = None):
         self._prices = dict(MODEL_PRICING)
+        self._custom_models: set[str] = set()
         if custom_prices:
             self._prices.update(custom_prices)
+            for key, price in custom_prices.items():
+                self._custom_models.update((key, price.model, *price.aliases))
 
     def get_price(self, model: str) -> ModelPrice | None:
         """Look up pricing for a model, trying exact match then prefix match."""
@@ -217,10 +220,9 @@ class Pricer:
         price = self.get_price(model)
 
         if price is None:
-            # Unknown model — estimate at $2/$8 per 1M (reasonable median)
-            in_cost = ((input_tokens + cache_creation_tokens) / 1_000_000) * 2.0
-            out_cost = (output_tokens / 1_000_000) * 8.0
-            return (round(in_cost, 6), round(out_cost, 6), round(in_cost + out_cost, 6))
+            # Unknown models are unpriced. Keep the old heuristic available only
+            # through rough_estimate_call(), never in authoritative totals.
+            return (0.0, 0.0, 0.0)
 
         # Non-cached input tokens billed at full rate
         billable_input = max(0, input_tokens - cached_tokens) if cached_included_in_input else input_tokens
@@ -246,6 +248,38 @@ class Pricer:
             round(in_cost + out_cost, 6),
         )
 
+    def rough_estimate_call(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        cache_creation_tokens: int = 0,
+    ) -> tuple[float, float, float]:
+        """Return the separate $2/$8-per-1M rough estimate for an unpriced call."""
+        in_cost = ((input_tokens + cache_creation_tokens) / 1_000_000) * 2.0
+        out_cost = (output_tokens / 1_000_000) * 8.0
+        return (round(in_cost, 6), round(out_cost, 6), round(in_cost + out_cost, 6))
+
+    def get_price_source(self, model: str) -> dict:
+        """Describe whether a model price is verified, custom, or unpriced."""
+        price = self.get_price(model)
+        if price is None:
+            return {
+                "source": "fallback",
+                "label": "fallback / unpriced",
+                "authoritative": False,
+            }
+        if model in self._custom_models or price.model in self._custom_models:
+            return {
+                "source": "custom",
+                "label": "custom local",
+                "authoritative": True,
+            }
+        return {
+            "source": "verified",
+            "label": "verified built-in",
+            "authoritative": True,
+        }
+
     def list_models(self, provider: str = "") -> list[ModelPrice]:
         """List all known models, optionally filtered by provider."""
         seen = set()
@@ -261,5 +295,7 @@ class Pricer:
     def add_custom_price(self, price: ModelPrice):
         """Register a custom model price."""
         self._prices[price.model] = price
+        self._custom_models.add(price.model)
         for alias in price.aliases:
             self._prices[alias] = price
+            self._custom_models.add(alias)

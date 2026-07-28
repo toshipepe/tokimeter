@@ -1,6 +1,6 @@
 # <img src="favicon.svg" width="26" alt=""> Tokimeter
 
-**A private, local-first cost and budget meter for AI coding agents.**
+**Know your AI coding usage before a budget or limit surprises you.**
 
 See what **Claude Code**, **Codex CLI**,
 **Grok Build**, **Hermes**, **opencode**, **Cline**, **Copilot CLI**, and
@@ -54,6 +54,12 @@ If the report is useful, install the command and its local HUDs:
 npm install -g tokimeter && "$(npm prefix -g)/bin/tokimeter" setup --auto
 ```
 
+Preview every file and process action first, with no mutation:
+
+```bash
+tokimeter setup --auto --dry-run
+```
+
 Close and reopen your terminal when setup finishes. Then keep using `codex`,
 `claude`, and your other supported tools normally; Tokimeter keeps its local
 usage meter up to date and warns against budgets you choose. Calling the
@@ -70,8 +76,8 @@ npm's global executable directory is not yet on zsh's `PATH`.
 
 ## Am I about to hit my limit?
 
-Claude and ChatGPT subscriptions meter you on a **5-hour rolling window** plus a
-weekly cap. Tokimeter shows your usage inside those exact windows:
+Tokimeter groups locally observed usage into **5-hour** and **7-day** views for
+budgets you set. When a tool records vendor counters, those appear separately:
 
 ```bash
 tokimeter limits
@@ -127,7 +133,7 @@ extra model call.
 tokimeter watch --tool claude   # live per-tool feed
 tokimeter latest --tool codex   # most recent calls
 tokimeter doctor                # optional troubleshooting
-tokimeter uninstall             # removes everything it installed
+tokimeter uninstall             # restores prior configs and removes generated setup files
 ```
 
 ## More than a total
@@ -145,8 +151,9 @@ tokimeter report --md > report.md  # shareable Markdown report (also --html) for
 tokimeter report --provider xai    # xAI usage across Grok Build, Hermes, and other tracked tools
 ```
 
-Every one is factual: it restates your own token counts, stays silent on models
-it can't price, and never invents a recommendation. `tokimeter savings
+Every one is factual: it restates your own token counts, excludes unknown
+models from priced totals, shows any fallback only as a separate rough
+estimate, and never invents a recommendation. `tokimeter savings
 --emit-policy` goes one step further and prints a routing policy in
 LiteLLM / OpenRouter format from your real usage, so a gateway can enforce what
 the report only observes.
@@ -165,7 +172,7 @@ the report only observes.
 | opencode | Live verified with 1.17.18 | Local message files/database; no setup for reports | Recorded token counts and request-time cost when present; otherwise priced `~` estimates. |
 | Cline | Live verified with CLI 3.0.39 + Codex OAuth | Local task/session history; no setup for reports | Numeric usage and Cline's request-time cost when present. Prompt and response content are ignored. |
 | Copilot CLI / Aider | Fixture tested | Copilot file exporter or Aider history import/proxy | Parser, deduplication, accounting, and privacy behavior pass fixtures; not claimed as live-verified in this release. |
-| Anthropic/OpenAI proxy routes | Test-covered, not sent to paid APIs | Optional localhost proxy | Designed to show billed API-key usage without `~`; paid routes were not exercised during this release audit. |
+| Anthropic/OpenAI proxy routes | Experimental and test-covered; not sent to paid APIs in this audit | Optional localhost proxy | Designed for billed API-key usage, but not invoice-reconciled. Verify against provider billing before treating it as billed-exact. |
 
 “Fixture tested” means the local parser, deduplication, token accounting, and
 privacy behavior pass against representative records, but this release was not
@@ -271,12 +278,18 @@ and are captured live.
   you configured, not 83% of a subscription allowance claimed by Tokimeter.
 - **`~$X` means API-equivalent estimate.** On a Claude/ChatGPT subscription you
   pay a flat fee; the dollar figure is what that usage *would* cost at API
-  rates, i.e. the value you're extracting from your subscription. Billed
-  API-key usage (via the optional local proxy) is shown without the `~`.
-- **All four cache buckets priced correctly**: input, cache write (~1.25×),
-  cache read (~0.1×), output. Verified prices for current Claude and GPT
-  models built in, plus `tokimeter pricing refresh` to pull a
-  community-maintained table covering ~280 more models.
+  rates, i.e. the value you're extracting from your subscription. A
+  provider/tool-reported request cost is kept as reported. The optional paid
+  proxy is experimental and should be reconciled against provider billing.
+- **Price provenance stays visible.** Calls are labeled provider/tool-reported,
+  verified built-in, community feed, custom local, or unpriced. A community
+  price is never called built-in.
+- **Unknown models do not inflate priced totals.** Tokimeter can show a separate
+  rough `$2/$8 per 1M` fallback, but excludes it from totals and savings claims
+  until a sourced or custom price exists.
+- **Cache buckets are separate**: input, cache write/creation, cache read, and
+  output. See the compact [pricing methodology](docs/PRICING.md) for cache
+  defaults, provenance precedence, subscriptions, invoices, and unknown models.
 
 ## What Tokimeter is for
 
@@ -296,6 +309,11 @@ Tokimeter stores **usage metadata only**: tokens, models, costs, project
 paths. Never prompt or response content. Nothing is sent anywhere by default:
 no telemetry, no phone-home. The optional proxy binds to localhost and never
 logs your API keys. Full details: [SECURITY.md](SECURITY.md).
+
+The published `tokimeter` package declares no `install` or `postinstall`
+lifecycle script. Installing it places package files and command entries;
+configuration changes happen only when you explicitly run `tokimeter setup`,
+which supports `--dry-run` and is reversible with `tokimeter uninstall`.
 
 ## Python SDK
 
@@ -335,10 +353,11 @@ pause. Synced cloud data is retained for a 30-day reactivation window and then
 deleted automatically. Local reports and tracking keep working throughout.
 
 A **Team** plan ($10 per user / month billed annually, or $12 monthly) adds an
-org dashboard, per-member usage, shared tool/model/project history, and seat
-management. It's in early access while we onboard the first teams. Chargeback
-exports and team alert destinations remain on the roadmap rather than being
-advertised as live features.
+org dashboard, per-member usage, shared tool/model/project history, seat
+management, shared budgets/alerts, and a chargeback CSV with project/client and
+cost-center allocation. It's in early access while we onboard the first teams.
+The free local Markdown/HTML report is the consultant/client handoff; the Team
+CSV is the hosted multi-member allocation export.
 
 To connect the hosted dashboard, sign in at
 [tokimeter.com/app](https://tokimeter.com/app), choose **Connect this device**,

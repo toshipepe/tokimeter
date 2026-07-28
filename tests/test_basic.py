@@ -52,11 +52,18 @@ def test_pricing_cached():
 
 
 def test_pricing_unknown_model():
-    """Test that unknown models get estimated pricing."""
+    """Test that unknown models stay outside authoritative pricing."""
     pricer = Pricer()
     in_cost, out_cost, total = pricer.price_call("some-unknown-model", 1_000_000, 1_000_000)
-    assert in_cost > 0 and out_cost > 0
-    print(f"✓ test_pricing_unknown_model passed (estimated ${total})")
+    assert (in_cost, out_cost, total) == (0.0, 0.0, 0.0)
+    rough_in, rough_out, rough_total = pricer.rough_estimate_call(1_000_000, 1_000_000)
+    assert (rough_in, rough_out, rough_total) == (2.0, 8.0, 10.0)
+    assert pricer.get_price_source("some-unknown-model") == {
+        "source": "fallback",
+        "label": "fallback / unpriced",
+        "authoritative": False,
+    }
+    print("✓ test_pricing_unknown_model passed (rough $10 excluded)")
 
 
 def test_pricing_aliases():
@@ -89,6 +96,32 @@ def test_tracker_memory():
     print(f"✓ test_tracker_memory passed (cost: ${call.total_cost:.6f})")
 
 
+def test_tracker_separates_unknown_pricing():
+    """Known costs aggregate while unknown-model rough estimates remain separate."""
+    tracker = Tracker()
+    known = tracker.record(
+        provider="openai",
+        model="gpt-4o",
+        input_tokens=1_000_000,
+        output_tokens=1_000_000,
+    )
+    unknown = tracker.record(
+        provider="custom",
+        model="future-model",
+        input_tokens=1_000_000,
+        output_tokens=1_000_000,
+    )
+    report = tracker.get_report()
+
+    assert report.total_cost == known.total_cost == 12.5
+    assert unknown.total_cost == 0
+    assert report.rough_estimate_cost == 10
+    assert report.unpriced_calls == 1
+    assert report.pricing_sources == {"verified": 1, "fallback": 1}
+    assert unknown.tags["pricing_authoritative"] is False
+    print("✓ test_tracker_separates_unknown_pricing passed")
+
+
 def test_tracker_sqlite():
     """Test SQLite persistent tracking."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -114,6 +147,33 @@ def test_tracker_sqlite():
         tracker2 = Tracker(db_path=db_path)
         assert tracker2.total_calls() == 10
         print(f"✓ test_tracker_sqlite passed (10 calls, ${tracker.total_cost():.4f})")
+    finally:
+        os.unlink(db_path)
+
+
+def test_tracker_excludes_legacy_unknown_fallback():
+    """An unlabeled legacy unknown-model amount is treated as rough on read."""
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+
+    try:
+        store = SQLiteStore(db_path)
+        store.record_call(LLMCall(
+            provider="custom",
+            model="legacy-unknown",
+            input_tokens=1_000_000,
+            output_tokens=1_000_000,
+            input_cost=2,
+            output_cost=8,
+            total_cost=10,
+        ))
+        store.close()
+
+        report = Tracker(db_path=db_path).get_report()
+        assert report.total_cost == 0
+        assert report.rough_estimate_cost == 10
+        assert report.unpriced_calls == 1
+        print("✓ test_tracker_excludes_legacy_unknown_fallback passed")
     finally:
         os.unlink(db_path)
 
@@ -259,6 +319,7 @@ def test_custom_pricing():
     in_cost, out_cost, total = pricer.price_call("my-finetuned-model", 1_000_000, 1_000_000)
     assert in_cost == 0.50
     assert out_cost == 2.00
+    assert pricer.get_price_source("my-finetuned-model")["source"] == "custom"
     print("✓ test_custom_pricing passed")
 
 
@@ -861,7 +922,9 @@ def run_all():
         test_pricing_unknown_model,
         test_pricing_aliases,
         test_tracker_memory,
+        test_tracker_separates_unknown_pricing,
         test_tracker_sqlite,
+        test_tracker_excludes_legacy_unknown_fallback,
         test_context_manager,
         test_cost_report,
         test_optimizer_downgrade,

@@ -124,13 +124,23 @@ class Tracker:
         workflow = workflow or ctx.get("workflow", "default")
         customer = customer or ctx.get("customer", "")
 
+        call_tags = dict(tags or {})
+
         # Calculate costs if not pre-provided
         if input_cost == 0 and output_cost == 0:
+            source = self.pricer.get_price_source(model)
             input_cost, output_cost, total_cost = self.pricer.price_call(
                 model, input_tokens, output_tokens, cached_tokens, provider
             )
+            call_tags["pricing_source"] = source["source"]
+            call_tags["pricing_authoritative"] = source["authoritative"]
+            if not source["authoritative"]:
+                _, _, rough = self.pricer.rough_estimate_call(input_tokens, output_tokens)
+                call_tags["rough_estimate_cost"] = rough
         else:
             total_cost = input_cost + output_cost
+            call_tags["pricing_source"] = "reported"
+            call_tags["pricing_authoritative"] = True
 
         call = LLMCall(
             provider=provider,
@@ -147,7 +157,7 @@ class Tracker:
             latency_ms=latency_ms,
             success=success,
             error=error,
-            tags=tags or {},
+            tags=call_tags,
         )
 
         self._persist(call)
@@ -155,7 +165,35 @@ class Tracker:
 
     def record_call(self, call: LLMCall):
         """Record a pre-built LLMCall object."""
+        if "pricing_source" not in call.tags:
+            if call.total_cost or call.input_cost or call.output_cost:
+                call.tags["pricing_source"] = "reported"
+                call.tags["pricing_authoritative"] = True
+            else:
+                self._normalize_loaded_pricing(call)
         self._persist(call)
+
+    def _normalize_loaded_pricing(self, call: LLMCall):
+        """Conservatively classify older stored calls before reporting them."""
+        if "pricing_source" in call.tags:
+            return
+        source = self.pricer.get_price_source(call.model)
+        call.tags["pricing_source"] = source["source"]
+        call.tags["pricing_authoritative"] = source["authoritative"]
+        if source["authoritative"]:
+            return
+
+        # Older releases stored the fallback inside total_cost. Treat an
+        # unlabeled unknown-model amount as rough, not authoritative.
+        rough = call.total_cost
+        if not rough:
+            _, _, rough = self.pricer.rough_estimate_call(
+                call.input_tokens, call.output_tokens
+            )
+        call.tags["rough_estimate_cost"] = rough
+        call.input_cost = 0.0
+        call.output_cost = 0.0
+        call.total_cost = 0.0
 
     def _persist(self, call: LLMCall):
         if self._async_writer:
@@ -169,7 +207,10 @@ class Tracker:
 
     def get_calls(self, **kwargs) -> list[LLMCall]:
         if self._backend:
-            return self._backend.get_calls(**kwargs)
+            results = self._backend.get_calls(**kwargs)
+            for call in results:
+                self._normalize_loaded_pricing(call)
+            return results
         # In-memory filtering
         results = list(self._memory_calls)
         limit = kwargs.get("limit", 0)
@@ -184,6 +225,8 @@ class Tracker:
                 results = [c for c in results if c.timestamp <= val]
         if limit:
             results = results[:limit]
+        for call in results:
+            self._normalize_loaded_pricing(call)
         return results
 
     def get_report(self, start_time: float = 0, end_time: float = 0):
@@ -196,9 +239,7 @@ class Tracker:
         return report
 
     def total_cost(self) -> float:
-        if self._backend:
-            return self._backend.get_total_cost()
-        return sum(c.total_cost for c in self._memory_calls)
+        return self.get_report().total_cost
 
     def total_calls(self) -> int:
         if self._backend:
