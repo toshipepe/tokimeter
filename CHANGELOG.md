@@ -5,6 +5,8 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+## 0.5.4 — 2026-07-28
+
 ### Trust and pricing
 
 - Separate verified built-in, community-feed, custom, reported, and
