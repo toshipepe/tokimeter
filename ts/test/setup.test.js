@@ -10,6 +10,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, '..', 'packages', 'proxy', 'src', 'cli.js');
 const PACKAGE_JSON = join(HERE, '..', 'packages', 'proxy', 'package.json');
 const STAGED_WORKFLOW = join(HERE, '..', '..', '.github', 'workflows', 'npm-staged-publish.yml');
+const RELEASE_DOC = join(HERE, '..', '..', 'docs', 'RELEASING.md');
 
 function isolatedEnv(root) {
   return {
@@ -107,5 +108,12 @@ test('npm package has no install hooks and release workflow is stage-only', () =
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /id-token: write/);
   assert.match(workflow, /npm stage publish/);
+  assert.match(workflow, /parts\[1\] > 15/);
+  assert.match(workflow, /npm 11\.15\.0 or newer is required for staged trusted publishing/);
   assert.doesNotMatch(workflow, /\bnpm publish\b/);
+
+  const releaseDoc = readFileSync(RELEASE_DOC, 'utf8');
+  assert.match(releaseDoc, /npm 11\.15\.0\+/);
+  assert.match(releaseDoc, /Require two-factor authentication and\s+disallow tokens/);
+  assert.match(releaseDoc, /workflow ref and the `tag` input/);
 });

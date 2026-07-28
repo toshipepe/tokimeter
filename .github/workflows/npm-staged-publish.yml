@@ -62,7 +62,7 @@ jobs:
       - name: Require npm trusted-publishing support
         run: |
           npm --version
-          node -e "const { execFileSync } = require('node:child_process'); const parts = execFileSync('npm', ['--version'], { encoding: 'utf8' }).trim().split('.').map(Number); const supported = parts[0] > 11 || (parts[0] === 11 && (parts[1] > 5 || (parts[1] === 5 && parts[2] >= 1))); if (!supported) throw new Error('npm 11.5.1 or newer is required for trusted publishing');"
+          node -e "const { execFileSync } = require('node:child_process'); const parts = execFileSync('npm', ['--version'], { encoding: 'utf8' }).trim().split('.').map(Number); const supported = parts[0] > 11 || (parts[0] === 11 && (parts[1] > 15 || (parts[1] === 15 && parts[2] >= 0))); if (!supported) throw new Error('npm 11.15.0 or newer is required for staged trusted publishing');"
 
       - name: Stage package with npm trusted publishing
         working-directory: ts/packages/proxy

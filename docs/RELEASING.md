@@ -25,12 +25,14 @@ Owner setup required before first use:
 1. In npm package settings, configure the trusted publisher for this repository
    and the exact workflow filename `npm-staged-publish.yml`.
 2. Allow **stage publish only**, not live publish.
-3. Protect the `npm-staging` GitHub environment and release tags.
-4. After a reviewed version commit and tag exist, dispatch the workflow on that
-   tag, inspect the staged tarball/provenance, and approve it with 2FA only when
-   ready.
+3. Set npm Publishing access to **Require two-factor authentication and
+   disallow tokens**.
+4. Protect the `npm-staging` GitHub environment and release tags.
+5. After a reviewed version commit and tag exist, dispatch the workflow with
+   that tag selected as both the workflow ref and the `tag` input. Inspect the
+   staged tarball/provenance, and approve it with 2FA only when ready.
 
-npm documents that trusted publishing requires npm 11.5.1+ and Node 22.14+,
+npm documents that staged trusted publishing requires npm 11.15.0+ and Node 22.14+,
 uses short-lived OIDC credentials, and generates provenance automatically for
 public packages from public repositories:
 [trusted publishing](https://docs.npmjs.com/trusted-publishers/) and
