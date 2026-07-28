@@ -397,9 +397,11 @@ function tokenConfidenceLabel(confidence) {
 }
 
 function pricingConfidenceLabel(confidence) {
+  if (confidence === 'community' || confidence === 'feed') return 'community pricing';
   if (confidence === 'custom') return 'custom pricing';
-  if (confidence === 'fallback') return 'fallback pricing';
-  return 'built-in pricing';
+  if (confidence === 'reported') return 'reported cost';
+  if (confidence === 'fallback') return 'unpriced';
+  return 'verified built-in pricing';
 }
 
 async function toggleTips() {
@@ -781,9 +783,11 @@ function getDashboardHTML() {
   }
 
   function pricingConfidenceLabel(confidence) {
+    if (confidence === 'community' || confidence === 'feed') return 'community pricing';
     if (confidence === 'custom') return 'custom pricing';
-    if (confidence === 'fallback') return 'fallback pricing';
-    return 'built-in pricing';
+    if (confidence === 'reported') return 'reported cost';
+    if (confidence === 'fallback') return 'unpriced';
+    return 'verified built-in pricing';
   }
 </script>
 </body>

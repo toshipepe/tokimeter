@@ -361,6 +361,10 @@ function normalizeManualCall(data) {
     cachedIncludedInInput: provider !== 'anthropic',
   });
   const source = String(data.source || 'manual');
+  const reportedInputCost = Math.max(0, Number(data.inputCost) || 0);
+  const reportedOutputCost = Math.max(0, Number(data.outputCost) || 0);
+  const reportedTotalCost = Math.max(0, Number(data.totalCost) || 0);
+  const hasReportedCost = reportedTotalCost > 0 || reportedInputCost > 0 || reportedOutputCost > 0;
 
   return {
     timestamp,
@@ -371,15 +375,18 @@ function normalizeManualCall(data) {
     cachedTokens,
     cacheCreationTokens,
     reasoningTokens: Math.max(0, Number(data.reasoningTokens) || 0),
-    inputCost: Number(data.inputCost) || cost.inputCost,
-    outputCost: Number(data.outputCost) || cost.outputCost,
-    totalCost: Number(data.totalCost) || cost.totalCost,
+    inputCost: hasReportedCost ? reportedInputCost : cost.inputCost,
+    outputCost: hasReportedCost ? reportedOutputCost : cost.outputCost,
+    totalCost: hasReportedCost ? (reportedTotalCost || reportedInputCost + reportedOutputCost) : cost.totalCost,
+    roughEstimateCost: hasReportedCost ? 0 : (Number(data.roughEstimateCost) || cost.roughEstimateCost || 0),
     latencyMs: Math.max(0, Number(data.latencyMs) || 0),
     success: data.success !== false,
     tool: String(data.tool || 'unknown'),
     source,
     confidence: data.confidence ? String(data.confidence) : confidenceForSource(source),
-    pricingConfidence: data.pricingConfidence ? String(data.pricingConfidence) : getPricingSource(model).confidence,
+    pricingConfidence: data.pricingConfidence
+      ? String(data.pricingConfidence)
+      : (hasReportedCost ? 'reported' : getPricingSource(model).confidence),
     effort: data.effort ? String(data.effort) : undefined,
     cwd: data.cwd ? String(data.cwd) : undefined,
     sessionId: data.sessionId ? String(data.sessionId) : undefined,
@@ -402,13 +409,20 @@ function formatCostLine(call, summary) {
   const parts = [];
 
   // Per-call cost
-  parts.push(`💰 $${call.totalCost.toFixed(4)}`);
+  if ((Number(call.roughEstimateCost) || 0) > 0) {
+    parts.push(`💰 unpriced · rough ~$${Number(call.roughEstimateCost).toFixed(4)} excluded`);
+  } else {
+    parts.push(`💰 $${call.totalCost.toFixed(4)}`);
+  }
 
   // Running total
   parts.push(`today: $${summary.todayCost.toFixed(2)} (${summary.todayCalls} calls)`);
 
   // Lifetime total
   parts.push(`lifetime: $${summary.totalCost.toFixed(2)}`);
+  if ((summary.roughEstimateCost || 0) > 0) {
+    parts.push(`unpriced rough: ~$${summary.roughEstimateCost.toFixed(2)} excluded`);
+  }
 
   return `✓ ${parts.join(' | ')}`;
 }
@@ -534,6 +548,7 @@ function handleProxy(req, res) {
           inputCost: cost.inputCost,
           outputCost: cost.outputCost,
           totalCost: cost.totalCost,
+          roughEstimateCost: cost.roughEstimateCost,
           latencyMs,
           success,
           tool: detectTool(req.headers),
@@ -698,7 +713,7 @@ server.listen(PORT, () => {
   ║    export OPENAI_BASE_URL=http://localhost:${PORT}             ║
   ║                                                               ║
   ║  Then use Claude Code, Codex, Aider etc. normally.            ║
-  ║  Costs appear here in real time.                              ║
+  ║  Experimental paid-route accounting; verify against invoices. ║
   ║                                                               ║
   ║  Press Ctrl+C to stop.                                        ║
   ╚═══════════════════════════════════════════════════════════════╝
@@ -724,6 +739,12 @@ function loadPersistedCalls() {
       try {
         const call = JSON.parse(line);
         if (!hasBillableOrTokenUsage(call)) continue;
+        if (call.pricingConfidence === 'fallback' && Number(call.totalCost) > 0) {
+          call.roughEstimateCost = Number(call.roughEstimateCost) || Number(call.totalCost);
+          call.totalCost = 0;
+          call.inputCost = 0;
+          call.outputCost = 0;
+        }
         tracker.record(call);
         if (call.externalId) seenExternalIds.add(call.externalId);
       } catch {

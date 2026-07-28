@@ -551,7 +551,9 @@ export function readAiderHistoryEvents(filePath, { sinceMs = 0 } = {}) {
       tool: 'aider',
       source: 'aider-history',
       confidence: 'estimated',
-      pricingConfidence: getPricingSource(cleanModel).confidence,
+      pricingConfidence: messageCost !== null && Number.isFinite(messageCost)
+        ? 'reported'
+        : getPricingSource(cleanModel).confidence,
       ...(messageCost !== null && Number.isFinite(messageCost) ? { totalCost: messageCost } : {}),
       sessionId: `aider:${basename(filePath)}:${sessionIndex}`,
       externalId: `aider-history:${filePath}:${i + 1}`,
@@ -731,7 +733,7 @@ export function hermesRowsToEvents(rows, { sinceMs = 0 } = {}) {
       tool: 'hermes',
       source: 'hermes-state-db',
       confidence: 'imported',
-      pricingConfidence: getPricingSource(model).confidence,
+      pricingConfidence: actualCost > 0 ? 'reported' : getPricingSource(model).confidence,
       ...(billingProvider ? { billingProvider } : {}),
       ...(billingProvider.startsWith('xai') ? { accessPath: 'xAI OAuth (subscription)' } : {}),
       ...(actualCost > 0 ? { totalCost: actualCost } : {}),
@@ -1569,9 +1571,10 @@ const fmtTok = (n) => {
 
 export function renderReportMarkdown(report) {
   const t = report.totals || {};
-  const rows = (list) => (list || []).map((r) => `| ${r.name} | ${fmtMoney(r.cost)} | ${r.calls} |`).join('\n');
+  const roughMoney = (n) => Number(n) > 0 ? `${fmtMoney(n)} (excluded)` : '—';
+  const rows = (list) => (list || []).map((r) => `| ${r.name} | ${fmtMoney(r.cost)} | ${roughMoney(r.roughEstimateCost)} | ${r.calls} |`).join('\n');
   const section = (title, list) => (list && list.length)
-    ? `\n## ${title}\n\n| Name | Est. cost | Calls |\n|---|---|---|\n${rows(list)}\n`
+    ? `\n## ${title}\n\n| Name | Priced cost | Unknown-model rough | Calls |\n|---|---|---|---|\n${rows(list)}\n`
     : '';
 
   const lines = [];
@@ -1579,15 +1582,16 @@ export function renderReportMarkdown(report) {
   lines.push('');
   lines.push(`Generated ${report.generatedAt} · ${report.costBasis}.`);
   lines.push('');
-  lines.push(`| | Est. cost | Calls |`);
-  lines.push(`|---|---|---|`);
-  lines.push(`| Total (window) | ${fmtMoney(t.cost)} | ${t.calls ?? ''} |`);
-  if (report.today) lines.push(`| Today | ${fmtMoney(report.today.cost)} | ${report.today.calls} |`);
-  if (report.last7Days) lines.push(`| Last 7 days | ${fmtMoney(report.last7Days.cost)} | ${report.last7Days.calls} |`);
+  lines.push(`| | Priced cost | Unknown-model rough | Calls |`);
+  lines.push(`|---|---|---|---|`);
+  lines.push(`| Total (window) | ${fmtMoney(t.cost)} | ${roughMoney(t.roughEstimateCost)} | ${t.calls ?? ''} |`);
+  if (report.today) lines.push(`| Today | ${fmtMoney(report.today.cost)} | ${roughMoney(report.today.roughEstimateCost)} | ${report.today.calls} |`);
+  if (report.last7Days) lines.push(`| Last 7 days | ${fmtMoney(report.last7Days.cost)} | ${roughMoney(report.last7Days.roughEstimateCost)} | ${report.last7Days.calls} |`);
   lines.push('');
   lines.push(`Tokens: ${fmtTok(t.inputTokens)} in · ${fmtTok(t.outputTokens)} out · ${fmtTok(t.cachedTokens)} cache read · ${fmtTok(t.cacheCreationTokens)} cache write.`);
   if (report.cacheReadSavings > 0) lines.push(`Saved by prompt caching: ${fmtMoney(report.cacheReadSavings)}.`);
 
+  lines.push(section('Pricing provenance', report.pricingSources));
   lines.push(section('By tool', report.byTool));
   lines.push(section('By provider', report.byProvider));
   lines.push(section('By access path', report.byAccessPath));
@@ -1595,8 +1599,8 @@ export function renderReportMarkdown(report) {
   lines.push(section('By project', report.byProject));
 
   if (report.byDay && report.byDay.length) {
-    lines.push(`\n## By day\n\n| Date | Est. cost | Calls |\n|---|---|---|`);
-    for (const d of report.byDay) lines.push(`| ${d.date} | ${fmtMoney(d.cost)} | ${d.calls} |`);
+    lines.push(`\n## By day\n\n| Date | Priced cost | Unknown-model rough | Calls |\n|---|---|---|---|`);
+    for (const d of report.byDay) lines.push(`| ${d.date} | ${fmtMoney(d.cost)} | ${roughMoney(d.roughEstimateCost)} | ${d.calls} |`);
   }
 
   const s = report.savings;
@@ -1618,7 +1622,7 @@ export function renderReportMarkdown(report) {
     }
   }
 
-  lines.push(`\n---\n_Estimates from local token metadata only — no prompt or response content is read. ~$ figures are API-equivalent estimates, not a bill._`);
+  lines.push(`\n---\n_Priced values use provider/tool-reported costs or sourced API rates. Subscription values are API-equivalent, not a bill or invoice. Unknown-model rough estimates are excluded. No prompt or response content is read._`);
   // Empty strings come from skipped sections; collapse runs of blank lines
   // but keep the single blanks markdown tables and headings need.
   return lines.join('\n').replace(/\n{3,}/g, '\n\n') + '\n';
@@ -1632,11 +1636,12 @@ export function renderReportHtml(report) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
   const t = report.totals || {};
+  const roughMoney = (n) => Number(n) > 0 ? `${fmtMoney(n)} (excluded)` : '—';
   const table = (title, head, rows) => rows.length ? `
   <h2>${esc(title)}</h2>
   <table><thead><tr>${head.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead>
   <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('\n')}</tbody></table>` : '';
-  const nameRows = (list) => (list || []).map((r) => [r.name, fmtMoney(r.cost), r.calls]);
+  const nameRows = (list) => (list || []).map((r) => [r.name, fmtMoney(r.cost), roughMoney(r.roughEstimateCost), r.calls]);
 
   const s = report.savings;
   const ins = report.insights || {};
@@ -1652,24 +1657,25 @@ export function renderReportHtml(report) {
 </style></head><body>
   <h1>Tokimeter report — last ${esc(report.windowDays)} days</h1>
   <p class="muted">Generated ${esc(report.generatedAt)} · ${esc(report.costBasis)}.</p>
-  ${table('Totals', ['', 'Est. cost', 'Calls'], [
-    ['Total (window)', fmtMoney(t.cost), t.calls ?? ''],
-    ...(report.today ? [['Today', fmtMoney(report.today.cost), report.today.calls]] : []),
-    ...(report.last7Days ? [['Last 7 days', fmtMoney(report.last7Days.cost), report.last7Days.calls]] : []),
+  ${table('Totals', ['', 'Priced cost', 'Unknown-model rough', 'Calls'], [
+    ['Total (window)', fmtMoney(t.cost), roughMoney(t.roughEstimateCost), t.calls ?? ''],
+    ...(report.today ? [['Today', fmtMoney(report.today.cost), roughMoney(report.today.roughEstimateCost), report.today.calls]] : []),
+    ...(report.last7Days ? [['Last 7 days', fmtMoney(report.last7Days.cost), roughMoney(report.last7Days.roughEstimateCost), report.last7Days.calls]] : []),
   ])}
   <p class="muted">Tokens: ${fmtTok(t.inputTokens)} in · ${fmtTok(t.outputTokens)} out · ${fmtTok(t.cachedTokens)} cache read · ${fmtTok(t.cacheCreationTokens)} cache write${report.cacheReadSavings > 0 ? ` · saved by prompt caching ${fmtMoney(report.cacheReadSavings)}` : ''}.</p>
-  ${table('By tool', ['Tool', 'Est. cost', 'Calls'], nameRows(report.byTool))}
-  ${table('By provider', ['Provider', 'Est. cost', 'Calls'], nameRows(report.byProvider))}
-  ${table('By access path', ['Access path', 'Est. cost', 'Calls'], nameRows(report.byAccessPath))}
-  ${table('By model', ['Model', 'Est. cost', 'Calls'], nameRows(report.byModel))}
-  ${table('By project', ['Project', 'Est. cost', 'Calls'], nameRows(report.byProject))}
-  ${table('By day', ['Date', 'Est. cost', 'Calls'], (report.byDay || []).map((d) => [d.date, fmtMoney(d.cost), d.calls]))}
+  ${table('Pricing provenance', ['Source', 'Priced cost', 'Unknown-model rough', 'Calls'], nameRows(report.pricingSources))}
+  ${table('By tool', ['Tool', 'Priced cost', 'Unknown-model rough', 'Calls'], nameRows(report.byTool))}
+  ${table('By provider', ['Provider', 'Priced cost', 'Unknown-model rough', 'Calls'], nameRows(report.byProvider))}
+  ${table('By access path', ['Access path', 'Priced cost', 'Unknown-model rough', 'Calls'], nameRows(report.byAccessPath))}
+  ${table('By model', ['Model', 'Priced cost', 'Unknown-model rough', 'Calls'], nameRows(report.byModel))}
+  ${table('By project', ['Project', 'Priced cost', 'Unknown-model rough', 'Calls'], nameRows(report.byProject))}
+  ${table('By day', ['Date', 'Priced cost', 'Unknown-model rough', 'Calls'], (report.byDay || []).map((d) => [d.date, fmtMoney(d.cost), roughMoney(d.roughEstimateCost), d.calls]))}
   ${s && s.totals && s.totals.savings > 0 ? `
   <h2>Savings opportunity (upper bound)</h2>
   <p>Routine-looking premium turns cost ${fmtMoney(s.totals.routineCost)}; on the cheapest same-provider tier ${fmtMoney(s.totals.atCheaperCost)} — a ${fmtMoney(s.totals.savings)} gap over ${esc(s.windowDays)} days.</p>
   <p class="muted">${esc(s.basis)}</p>` : ''}
   ${ins.cacheHitRate != null ? `<h2>Insights</h2><p>Cache hit rate: ${esc(ins.cacheHitRate)}% of context tokens served from cache.</p>` : ''}
-  <footer class="muted">Estimates from local token metadata only — no prompt or response content is read. ~$ figures are API-equivalent estimates, not a bill.</footer>
+  <footer class="muted">Priced values use provider/tool-reported costs or sourced API rates. Subscription values are API-equivalent, not a bill or invoice. Unknown-model rough estimates are excluded. No prompt or response content is read.</footer>
 </body></html>
 `;
 }
@@ -1857,6 +1863,9 @@ export function opencodeMessageToEvent(obj, { sinceMs = 0, fallbackId = '' } = {
     // opencode reports disjoint cache buckets regardless of provider.
     cachedDisjoint: true,
     totalCost: Number.isFinite(cost) && cost > 0 ? cost : 0,
+    pricingConfidence: Number.isFinite(cost) && cost > 0
+      ? 'reported'
+      : getPricingSource(obj.modelID || 'unknown').confidence,
     tool: 'opencode',
     source: 'opencode-message',
     confidence: 'exact',
@@ -1955,6 +1964,9 @@ export function clineTaskToEvents(uiMessages, { sinceMs = 0, taskId = '', modelU
       cacheCreationTokens,
       cachedDisjoint: true,
       totalCost: Number.isFinite(cost) && cost > 0 ? cost : 0,
+      pricingConfidence: Number.isFinite(cost) && cost > 0
+        ? 'reported'
+        : getPricingSource((m && m.model_id) || 'unknown').confidence,
       tool: 'cline',
       source: 'cline-ui-messages',
       confidence: 'exact',
@@ -2022,6 +2034,9 @@ export function clineSessionMessagesToEvents(payload, {
       cacheCreationTokens,
       cachedDisjoint: true,
       totalCost: Number.isFinite(cost) && cost > 0 ? cost : 0,
+      pricingConfidence: Number.isFinite(cost) && cost > 0
+        ? 'reported'
+        : getPricingSource(String(modelInfo.id || model || 'unknown')).confidence,
       tool: 'cline',
       source: 'cline-session-messages',
       confidence: 'exact',
@@ -2318,6 +2333,8 @@ export function cursorRecordToEvent(record) {
     cacheCreationTokens,
     cachedDisjoint: true,
     totalCost: Number.isFinite(cost) && cost > 0 ? cost : 0,
+    roughEstimateCost: Math.max(0, Number(record.roughEstimateCost) || 0),
+    pricingConfidence: record.pricingConfidence || getPricingSource(model).confidence,
     tool: 'cursor',
     source: record.source || 'cursor-stop-hook',
     confidence: 'exact',

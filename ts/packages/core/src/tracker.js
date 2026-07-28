@@ -18,6 +18,7 @@ import { priceCall, getPrice, getDowngrades } from './pricing.js';
  * @property {number} outputTokens
  * @property {number} cachedTokens
  * @property {number} totalCost
+ * @property {number} [roughEstimateCost] - separate heuristic for an unpriced model
  * @property {number} latencyMs
  * @property {boolean} success
  * @property {string} tool  - "claude-code", "codex", "cursor", "aider", etc.
@@ -29,6 +30,10 @@ import { priceCall, getPrice, getDowngrades } from './pricing.js';
  * @property {number} totalCalls
  * @property {number} todayCost
  * @property {number} todayCalls
+ * @property {number} roughEstimateCost
+ * @property {number} roughEstimateCalls
+ * @property {number} todayRoughEstimateCost
+ * @property {number} todayRoughEstimateCalls
  * @property {Record<string, number>} byModel  - { model: cost }
  * @property {Record<string, number>} byTool   - { tool: cost }
  * @property {Record<string, number>} byDay    - { "YYYY-MM-DD": cost }
@@ -65,6 +70,8 @@ export class CostTracker {
 
     let totalCost = 0, totalCalls = 0;
     let todayCost = 0, todayCalls = 0;
+    let roughEstimateCost = 0, roughEstimateCalls = 0;
+    let todayRoughEstimateCost = 0, todayRoughEstimateCalls = 0;
     const byModel = {};
     const byTool = {};
     const byDay = {};
@@ -72,6 +79,11 @@ export class CostTracker {
     for (const call of this.calls) {
       totalCost += call.totalCost;
       totalCalls++;
+      const rough = Number(call.roughEstimateCost) || 0;
+      if (rough > 0) {
+        roughEstimateCost += rough;
+        roughEstimateCalls++;
+      }
 
       byModel[call.model] = (byModel[call.model] || 0) + call.totalCost;
       byTool[call.tool] = (byTool[call.tool] || 0) + call.totalCost;
@@ -82,6 +94,10 @@ export class CostTracker {
       if (call.timestamp >= todayMs) {
         todayCost += call.totalCost;
         todayCalls++;
+        if (rough > 0) {
+          todayRoughEstimateCost += rough;
+          todayRoughEstimateCalls++;
+        }
       }
     }
 
@@ -90,6 +106,10 @@ export class CostTracker {
       totalCalls,
       todayCost: round4(todayCost),
       todayCalls,
+      roughEstimateCost: round4(roughEstimateCost),
+      roughEstimateCalls,
+      todayRoughEstimateCost: round4(todayRoughEstimateCost),
+      todayRoughEstimateCalls,
       byModel: roundDict(byModel),
       byTool: roundDict(byTool),
       byDay: roundDict(byDay),

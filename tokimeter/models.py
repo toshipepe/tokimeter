@@ -97,6 +97,9 @@ class CostReport:
     total_calls: int = 0
     total_input_tokens: int = 0
     total_output_tokens: int = 0
+    rough_estimate_cost: float = 0.0
+    unpriced_calls: int = 0
+    pricing_sources: dict = field(default_factory=dict)
 
     # Breakdowns
     by_provider: dict = field(default_factory=dict)    # {provider: cost}
@@ -113,6 +116,13 @@ class CostReport:
         self.total_calls += 1
         self.total_input_tokens += call.input_tokens
         self.total_output_tokens += call.output_tokens
+
+        source = str(call.tags.get("pricing_source", "reported"))
+        self.pricing_sources[source] = self.pricing_sources.get(source, 0) + 1
+        rough = float(call.tags.get("rough_estimate_cost", 0) or 0)
+        self.rough_estimate_cost += rough
+        if source == "fallback":
+            self.unpriced_calls += 1
 
         for dim, attr in [
             (call.provider, "by_provider"),

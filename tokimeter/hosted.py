@@ -91,16 +91,26 @@ def normalize_event(event: dict, pricer: Pricer) -> LLMCall:
     input_cost = float(event.get("input_cost", event.get("inputCost", 0)) or 0)
     output_cost = float(event.get("output_cost", event.get("outputCost", 0)) or 0)
 
-    if input_cost == 0 and output_cost == 0:
-        input_cost, output_cost, total_cost = pricer.price_call(
-            model, input_tokens, output_tokens, cached_tokens, provider
-        )
-    else:
-        total_cost = input_cost + output_cost
+    reported_total = float(event.get("total_cost", event.get("totalCost", 0)) or 0)
 
     tags = event.get("tags") or {}
     if not isinstance(tags, dict):
         tags = {"raw_tags": str(tags)}
+
+    if input_cost == 0 and output_cost == 0 and reported_total == 0:
+        source = pricer.get_price_source(model)
+        input_cost, output_cost, total_cost = pricer.price_call(
+            model, input_tokens, output_tokens, cached_tokens, provider
+        )
+        tags["pricing_source"] = source["source"]
+        tags["pricing_authoritative"] = source["authoritative"]
+        if not source["authoritative"]:
+            _, _, rough = pricer.rough_estimate_call(input_tokens, output_tokens)
+            tags["rough_estimate_cost"] = rough
+    else:
+        total_cost = reported_total or input_cost + output_cost
+        tags["pricing_source"] = "reported"
+        tags["pricing_authoritative"] = True
 
     return LLMCall(
         id=str(event.get("id") or uuid.uuid4()),
@@ -112,7 +122,7 @@ def normalize_event(event: dict, pricer: Pricer) -> LLMCall:
         cached_tokens=cached_tokens,
         input_cost=input_cost,
         output_cost=output_cost,
-        total_cost=float(event.get("total_cost", event.get("totalCost", total_cost)) or 0),
+        total_cost=total_cost,
         agent_name=str(event.get("agent_name", event.get("agentName", "default")) or "default"),
         workflow=str(event.get("workflow", "default") or "default"),
         customer=str(event.get("customer", "")),

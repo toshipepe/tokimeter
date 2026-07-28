@@ -189,7 +189,7 @@ tokimeter watch --once             # Show local proxy spend + current savings ti
 tokimeter watch --live             # Reprint the local view every few seconds
 tokimeter watch --debug            # Include Codex metadata import diagnostics
 tokimeter pricing list             # List built-in/custom JS proxy pricing
-tokimeter pricing source <model>   # Explain built-in/custom/fallback pricing
+tokimeter pricing source <model>   # Explain built-in/custom/unpriced pricing
 tokimeter pricing add ...          # Add local pricing override for new models
 tokimeter config list              # Show local proxy/advisor settings
 tokimeter codex-import             # Import recent Codex rollout token metadata
@@ -197,6 +197,9 @@ tokimeter codex-import --backfill  # Intentionally import older Codex sessions
 tokimeter hosted init              # Create local hosted org/project/API key
 tokimeter hosted serve             # Run local hosted ingestion API
 ```
+
+Unknown Python SDK models are unpriced: their heuristic is kept in
+`rough_estimate_cost` report metadata and excluded from `total_cost`.
 
 ## Hosted SaaS Scaffold
 

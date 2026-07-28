@@ -3,6 +3,24 @@
 All notable changes to the `tokimeter` CLI. Dates are UTC.
 The versioning is [semver](https://semver.org); pre-1.0, minor versions may add features freely.
 
+## Unreleased
+
+### Trust and pricing
+
+- Separate verified built-in, community-feed, custom, reported, and
+  fallback/unpriced price sources throughout local summaries and reports.
+- Exclude unknown-model fallback estimates from authoritative priced totals and
+  show them separately as rough estimates in both the Node CLI and Python SDK.
+- Add compact public pricing methodology and npm release documentation.
+
+### Setup and release safety
+
+- Add `tokimeter setup --dry-run`, print setup plans before mutation, and restore
+  prior Codex and Claude configuration during uninstall where supported.
+- Add a manual, tag-gated, SHA-pinned npm staged-publishing workflow. It stages a
+  package for later owner approval and never performs a live `npm publish`.
+- Document that Tokimeter packages have no install or postinstall scripts.
+
 ## 0.5.1 — 2026-07-17
 
 ### Fixed

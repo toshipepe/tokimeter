@@ -326,13 +326,29 @@ def _print_report(report, args):
     print(_color("  ╚═══════════════════════════════════════════════════════════════╝", "bold"))
 
     print()
-    print(f"  {_color('Total Cost:', 'bold')}     {_color(f'${report.total_cost:.4f}', 'yellow')} "
+    print(f"  {_color('Priced Total:', 'bold')}   {_color(f'${report.total_cost:.4f}', 'yellow')} "
           f"({_color(f'{report.total_calls} calls', 'dim')})")
+    if report.unpriced_calls:
+        print(f"  {_color('Unknown Rough:', 'dim')}   ~${report.rough_estimate_cost:.4f} "
+              f"({_color(f'{report.unpriced_calls} calls; excluded', 'dim')})")
     print(f"  {_color('Input Cost:', 'dim')}      ${report.total_input_cost:.4f}")
     print(f"  {_color('Output Cost:', 'dim')}     ${report.total_output_cost:.4f}")
     print(f"  {_color('Input Tokens:', 'dim')}    {report.total_input_tokens:,}")
     print(f"  {_color('Output Tokens:', 'dim')}   {report.total_output_tokens:,}")
     print(f"  {_color('Avg Cost/Call:', 'dim')}   ${report.total_cost / max(report.total_calls, 1):.6f}")
+
+    if report.pricing_sources:
+        labels = {
+            "verified": "verified built-in",
+            "custom": "custom local",
+            "reported": "provider/tool reported",
+            "fallback": "fallback / unpriced",
+        }
+        source_text = " · ".join(
+            f"{labels.get(source, source)} {count}"
+            for source, count in sorted(report.pricing_sources.items())
+        )
+        print(f"  {_color('Price Sources:', 'dim')}    {source_text}")
 
     if report.by_agent:
         print()
@@ -454,7 +470,10 @@ def cmd_budgets(args):
     print()
     print(_color("  💰 Budget Status", "bold"))
     print(f"  {'─' * 50}")
-    print(f"  Total spend: {_color(f'${report.total_cost:.2f}', 'yellow')}")
+    print(f"  Priced spend: {_color(f'${report.total_cost:.2f}', 'yellow')}")
+    if report.unpriced_calls:
+        print(f"  Unknown-model rough: ~${report.rough_estimate_cost:.2f} "
+              f"({report.unpriced_calls} calls; excluded)")
     print()
     print("  To set up budget alerts, see: tokimeter/alerts.py")
     print()
