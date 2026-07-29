@@ -1,12 +1,9 @@
-# <img src="favicon.svg" width="26" alt=""> Tokimeter
+<h1><img src="favicon.svg" width="36" alt="Tokimeter logo" align="absmiddle"> Tokimeter</h1>
 
 **Local-first usage and cost meter for Claude Code, Codex, Cursor, Grok Build,
 and other AI coding agents — no account, no telemetry.**
 
-[![npm version](https://img.shields.io/npm/v/tokimeter.svg)](https://www.npmjs.com/package/tokimeter)
-[![GitHub release](https://img.shields.io/github/v/release/toshipepe/tokimeter)](https://github.com/toshipepe/tokimeter/releases/latest)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node 18+](https://img.shields.io/badge/node-18+-green.svg)](https://nodejs.org/en/download)
+[![npm version](https://img.shields.io/npm/v/tokimeter.svg)](https://www.npmjs.com/package/tokimeter) [![GitHub release](https://img.shields.io/github/v/release/toshipepe/tokimeter)](https://github.com/toshipepe/tokimeter/releases/latest) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Node 18+](https://img.shields.io/badge/node-18+-green.svg)](https://nodejs.org/en/download)
 
 [Website](https://tokimeter.com) · [Coverage](#coverage-and-data-fidelity) ·
 [How the numbers work](#honest-numbers-by-design)
