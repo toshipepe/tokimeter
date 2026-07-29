@@ -1,15 +1,13 @@
-<h1><img src="favicon.svg" width="40" alt="Tokimeter logo" align="left" hspace="6">Tokimeter</h1>
+<h1>
+  <a href="https://nodejs.org/en/download"><img src="https://img.shields.io/badge/node-18+-green.svg" alt="Node 18+" align="right" hspace="2"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" align="right" hspace="2"></a>
+  <a href="https://github.com/toshipepe/tokimeter/releases/latest"><img src="https://img.shields.io/github/v/release/toshipepe/tokimeter" alt="GitHub release" align="right" hspace="2"></a>
+  <a href="https://www.npmjs.com/package/tokimeter"><img src="https://img.shields.io/npm/v/tokimeter.svg" alt="npm version" align="right" hspace="2"></a>
+  <img src="favicon.svg" width="40" alt="Tokimeter logo" align="left" hspace="3">Tokimeter<sub>&nbsp;</sub>
+</h1>
 
 **Local-first usage and cost meter for Claude Code, Codex, Cursor, Grok Build,
 and other AI coding agents — no account, no telemetry.**
-
-<p>
-  <a href="https://www.npmjs.com/package/tokimeter"><img src="https://img.shields.io/npm/v/tokimeter.svg" alt="npm version" align="left" hspace="2"></a>
-  <a href="https://github.com/toshipepe/tokimeter/releases/latest"><img src="https://img.shields.io/github/v/release/toshipepe/tokimeter" alt="GitHub release" align="left" hspace="2"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" align="left" hspace="2"></a>
-  <a href="https://nodejs.org/en/download"><img src="https://img.shields.io/badge/node-18+-green.svg" alt="Node 18+" align="left" hspace="2"></a>
-</p>
-<br clear="left">
 
 [Website](https://tokimeter.com) · [Coverage](#coverage-and-data-fidelity) ·
 [How the numbers work](#honest-numbers-by-design)
