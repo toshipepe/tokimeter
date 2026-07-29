@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="358" height="40" viewBox="0 0 358 40" role="img" aria-label="npm v0.5.4, release v0.5.4, MIT license, Node 18+">
+  <title>npm v0.5.4 · release v0.5.4 · MIT · Node 18+</title>
+  <defs>
+    <clipPath id="npm">
+      <rect x="0" y="10" width="82" height="20" rx="3"/>
+    </clipPath>
+    <clipPath id="release">
+      <rect x="90" y="10" width="98" height="20" rx="3"/>
+    </clipPath>
+    <clipPath id="license">
+      <rect x="196" y="10" width="82" height="20" rx="3"/>
+    </clipPath>
+    <clipPath id="node">
+      <rect x="286" y="10" width="72" height="20" rx="3"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#npm)">
+    <rect x="0" y="10" width="36" height="20" fill="#555"/>
+    <rect x="36" y="10" width="46" height="20" fill="#e76f51"/>
+  </g>
+  <g clip-path="url(#release)">
+    <rect x="90" y="10" width="52" height="20" fill="#555"/>
+    <rect x="142" y="10" width="46" height="20" fill="#e76f51"/>
+  </g>
+  <g clip-path="url(#license)">
+    <rect x="196" y="10" width="48" height="20" fill="#555"/>
+    <rect x="244" y="10" width="34" height="20" fill="#d4aa00"/>
+  </g>
+  <g clip-path="url(#node)">
+    <rect x="286" y="10" width="38" height="20" fill="#555"/>
+    <rect x="324" y="10" width="34" height="20" fill="#4c9a22"/>
+  </g>
+
+  <g fill="#fff" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11">
+    <text x="18" y="24" text-anchor="middle">npm</text>
+    <text x="59" y="24" text-anchor="middle">v0.5.4</text>
+    <text x="116" y="24" text-anchor="middle">release</text>
+    <text x="165" y="24" text-anchor="middle">v0.5.4</text>
+    <text x="220" y="24" text-anchor="middle">License</text>
+    <text x="261" y="24" text-anchor="middle">MIT</text>
+    <text x="305" y="24" text-anchor="middle">node</text>
+    <text x="341" y="24" text-anchor="middle">18+</text>
+  </g>
+</svg>
