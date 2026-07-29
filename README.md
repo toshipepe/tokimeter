@@ -2,12 +2,17 @@
 
 **Know your AI coding usage before a budget or limit surprises you.**
 
-See what **Claude Code**, **Codex CLI**,
+See what **Claude Code (CLI and desktop)**, **Codex (CLI and desktop)**,
 **Grok Build**, **Hermes**, **opencode**, **Cline**, **Copilot CLI**, and
-**Cursor CLI** actually use, what that usage would cost, and when it crosses a
-budget you set. Local reports need no Tokimeter account, provider API key,
-proxy, telemetry, prompt upload, or extra model call. Your data stays on your
-machine unless you explicitly connect the optional hosted dashboard.
+**Cursor CLI/Desktop Agent** actually use, what that usage would cost, and when
+it crosses a budget you set. Local reports need no Tokimeter account, provider
+API key, proxy, telemetry, prompt upload, or extra model call. Your data stays
+on your machine unless you explicitly connect the optional hosted dashboard.
+
+Claude Code and Codex coverage includes local coding sessions created from
+their CLI and desktop surfaces. Regular Claude or ChatGPT chats and
+remote/cloud-only sessions are outside the report when they do not write
+supported usage records to this machine.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node 18+](https://img.shields.io/badge/node-18+-green.svg)](#)
@@ -164,8 +169,8 @@ the report only observes.
 
 | Integration | Verification | Source and setup | What the numbers mean |
 |---|---|---|---|
-| Claude Code | Live verified | Local transcripts; no setup for reports, optional setup for the HUD | Exact recorded token/cache counts and `~` API-equivalent cost. Local 5h/7d windows and user budgets; no invented vendor reset time. |
-| Codex CLI | Live verified | Local session logs; no setup for reports, optional setup for live metering/overlay | Exact recorded token/cache counts and `~` cost. Vendor-reported 5h/weekly counters and resets when Codex records them. |
+| Claude Code (CLI/Desktop) | Live verified | Local transcripts shared by CLI and desktop coding sessions; no setup for reports, optional setup for the HUD | Exact recorded token/cache counts and `~` API-equivalent cost. Local 5h/7d windows and user budgets; no invented vendor reset time. |
+| Codex (CLI/Desktop) | Live verified | Local session logs shared by CLI and desktop coding sessions; no setup for reports, optional setup for live metering/overlay | Exact recorded token/cache counts and `~` cost. Vendor-reported 5h/weekly counters and resets when Codex records them. |
 | Cursor CLI/Desktop Agent | Live verified | Status-line and stop hooks after `tokimeter setup cursor`; CSV import for classic editor chat | Exact per-turn usage after hook setup, local windows, and user-budget warnings. Earlier hookless turns are not reconstructed. |
 | Grok Build | Live verified | Local `~/.grok/logs`; optional stop hook for alarms | Exact recorded per-turn tokens and `~` cost. Local windows and user budgets, not a claimed vendor quota. |
 | Hermes | Live verified | Local `~/.hermes` database; no setup for reports | Provider-recorded session totals and billed cost when present; otherwise priced `~` estimates. |
