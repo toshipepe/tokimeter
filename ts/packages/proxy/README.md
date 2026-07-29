@@ -2,11 +2,17 @@
 
 **A private, local-first cost and budget meter for AI coding agents.**
 
-See what **Claude Code, Codex CLI, Cursor, Grok Build, Hermes, opencode, Cline,
-and Copilot CLI** actually use, what that usage would cost, and when it crosses
-a budget you set. Local reports need no Tokimeter account, provider API key,
-proxy, telemetry, or prompt upload. Usage metadata only — your prompts and code
-stay on your machine unless you explicitly connect the optional dashboard.
+See what **Claude Code (CLI and desktop), Codex (CLI and desktop), Cursor, Grok
+Build, Hermes, opencode, Cline, and Copilot CLI** actually use, what that usage
+would cost, and when it crosses a budget you set. Local reports need no
+Tokimeter account, provider API key, proxy, telemetry, or prompt upload. Usage
+metadata only — your prompts and code stay on your machine unless you
+explicitly connect the optional dashboard.
+
+Claude Code and Codex coverage includes local coding sessions created from
+their CLI and desktop surfaces. Regular Claude or ChatGPT chats and
+remote/cloud-only sessions are outside the report when they do not write
+supported usage records to this machine.
 
 ## Try one local report
 
@@ -26,8 +32,9 @@ upgrade, cloud sync and hosted access pause at trial end; synced cloud data is
 deleted 30 days later. Local reports and tracking remain free and continue on
 your device.
 
-Live-verified readers in this release: Claude Code, Codex CLI, Cursor
-CLI/Desktop Agent, Grok Build, Hermes, opencode 1.17.18, and Cline CLI 3.0.39.
+Live-verified readers in this release: Claude Code CLI/Desktop, Codex
+CLI/Desktop, Cursor CLI/Desktop Agent, Grok Build, Hermes, opencode 1.17.18,
+and Cline CLI 3.0.39.
 GitHub Copilot CLI and Aider are fixture-tested but were not completed as live
 requests during release testing. Paid Anthropic/OpenAI API routes are
 experimental and test-covered but were not exercised against paid APIs or
