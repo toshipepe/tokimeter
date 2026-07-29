@@ -1,39 +1,64 @@
 # <img src="favicon.svg" width="26" alt=""> Tokimeter
 
-**Know your AI coding usage before a budget or limit surprises you.**
+**Local-first usage and cost meter for Claude Code, Codex, Cursor, Grok Build,
+and other AI coding agents — no account, no telemetry.**
 
-See what **Claude Code (CLI and desktop)**, **Codex (CLI and desktop)**,
-**Grok Build**, **Hermes**, **opencode**, **Cline**, **Copilot CLI**, and
-**Cursor CLI/Desktop Agent** actually use, what that usage would cost, and when
-it crosses a budget you set. Local reports need no Tokimeter account, provider
-API key, proxy, telemetry, prompt upload, or extra model call. Your data stays
-on your machine unless you explicitly connect the optional hosted dashboard.
-
-Claude Code and Codex coverage includes local coding sessions created from
-their CLI and desktop surfaces. Regular Claude or ChatGPT chats and
-remote/cloud-only sessions are outside the report when they do not write
-supported usage records to this machine.
-
+[![npm version](https://img.shields.io/npm/v/tokimeter.svg)](https://www.npmjs.com/package/tokimeter)
+[![GitHub release](https://img.shields.io/github/v/release/toshipepe/tokimeter)](https://github.com/toshipepe/tokimeter/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node 18+](https://img.shields.io/badge/node-18+-green.svg)](#)
+[![Node 18+](https://img.shields.io/badge/node-18+-green.svg)](https://nodejs.org/en/download)
 
-## Try one local report
+[Website](https://tokimeter.com) · [Coverage](#coverage-and-data-fidelity) ·
+[How the numbers work](#honest-numbers-by-design)
 
-Tokimeter requires [Node.js 18+](https://nodejs.org/en/download), which includes
-`npm` and `npx`. If Terminal says `npm: command not found` or
-`npx: command not found`, install Node.js first, then reopen Terminal.
+## Try it now — no install
 
 ```bash
 npx tokimeter report
 ```
 
-If Node.js/npm is already installed, `npx` downloads Tokimeter into npm's
-temporary cache and runs one local report.
-It does not permanently install the `tokimeter` command, start an ongoing
-local meter, or enable optional dashboard syncing. No proxy, config, or API
-keys are needed.
-Tokimeter reads the usage metadata your tools already write locally (Claude
-Code transcripts, Codex session logs) and shows you:
+Runs one private report from the usage metadata already on your machine.
+
+## Install once — get the complete local meter
+
+Reports, budgets, limit warnings, live status-line HUDs, and more:
+
+```bash
+npm install -g tokimeter && "$(npm prefix -g)/bin/tokimeter" setup --auto
+```
+
+<p align="center">
+  <strong>One report across your coding agents</strong><br>
+  <img src="demo.gif" alt="npx tokimeter report, limits, and compare running in a terminal" width="640">
+</p>
+
+<p align="center">
+  <strong>Live usage and budget warnings while you work</strong><br>
+  <img src="demo-inline.gif" alt="Tokimeter status-line HUD inside Claude Code and Codex, showing today's spend and 5-hour-window usage with a budget warning appearing in place" width="720">
+</p>
+
+## Why Tokimeter exists
+
+I use Claude Code, Codex, Cursor, Hermes, Grok Build, and sometimes more. Each
+stores a different part of the usage picture. Tokimeter brings the numeric
+metadata already on your machine into one private report, so usage, limits,
+cache savings, and API-equivalent costs are easier to understand.
+
+Tokimeter reads usage metadata, not your prompts or responses. Local features
+need no Tokimeter account, provider API key, proxy, telemetry, prompt upload, or
+extra model call. Your data stays on your machine unless you explicitly connect
+the optional hosted dashboard.
+
+## What the local report shows
+
+Tokimeter requires [Node.js 18+](https://nodejs.org/en/download), which includes
+`npm` and `npx`. If Terminal says `npm: command not found` or
+`npx: command not found`, install Node.js first, then reopen Terminal.
+
+`npx tokimeter report` downloads Tokimeter into npm's temporary cache and runs
+one local report. It does not permanently install the `tokimeter` command,
+start an ongoing local meter, or enable optional dashboard syncing. No proxy,
+configuration, or API keys are needed.
 
 ```
   Tokimeter Report · last 30 days
@@ -51,13 +76,7 @@ Code transcripts, Codex session logs) and shows you:
 
 `--days=7`, `--tool claude|codex`, and `--json` are supported.
 
-## Install Tokimeter
-
-If the report is useful, install the command and its local HUDs:
-
-```bash
-npm install -g tokimeter && "$(npm prefix -g)/bin/tokimeter" setup --auto
-```
+## Setup details
 
 Preview every file and process action first, with no mutation:
 
@@ -70,14 +89,6 @@ Close and reopen your terminal when setup finishes. Then keep using `codex`,
 usage meter up to date and warns against budgets you choose. Calling the
 executable by its full npm location makes the first run reliable even when
 npm's global executable directory is not yet on zsh's `PATH`.
-
-<p align="center">
-  <img src="demo-inline.gif" alt="Tokimeter status-line HUD inside Claude Code and Codex, showing today's spend and 5-hour-window usage with a budget warning appearing in place" width="720">
-</p>
-
-<p align="center">
-  <img src="demo.gif" alt="npx tokimeter report, limits, and compare running in a terminal" width="640">
-</p>
 
 ## Am I about to hit my limit?
 

@@ -1,31 +1,52 @@
 # Tokimeter
 
-**A private, local-first cost and budget meter for AI coding agents.**
+**Local-first usage and cost meter for Claude Code, Codex, Cursor, Grok Build,
+and other AI coding agents — no account, no telemetry.**
 
-See what **Claude Code (CLI and desktop), Codex (CLI and desktop), Cursor, Grok
-Build, Hermes, opencode, Cline, and Copilot CLI** actually use, what that usage
-would cost, and when it crosses a budget you set. Local reports need no
-Tokimeter account, provider API key, proxy, telemetry, or prompt upload. Usage
-metadata only — your prompts and code stay on your machine unless you
-explicitly connect the optional dashboard.
+[![npm version](https://img.shields.io/npm/v/tokimeter.svg)](https://www.npmjs.com/package/tokimeter)
+[![GitHub release](https://img.shields.io/github/v/release/toshipepe/tokimeter)](https://github.com/toshipepe/tokimeter/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/toshipepe/tokimeter/blob/main/LICENSE)
+[![Node 18+](https://img.shields.io/badge/node-18+-green.svg)](https://nodejs.org/en/download)
 
-Claude Code and Codex coverage includes local coding sessions created from
-their CLI and desktop surfaces. Regular Claude or ChatGPT chats and
-remote/cloud-only sessions are outside the report when they do not write
-supported usage records to this machine.
+[Website](https://tokimeter.com) ·
+[Source](https://github.com/toshipepe/tokimeter)
 
-## Try one local report
+## Try it now — no install
 
 ```bash
 npx tokimeter report
 ```
 
+Runs one private report from the usage metadata already on your machine.
+
+## Install once — get the complete local meter
+
+Reports, budgets, limit warnings, live status-line HUDs, and more:
+
+```bash
+npm install -g tokimeter && "$(npm prefix -g)/bin/tokimeter" setup --auto
+```
+
+## Why Tokimeter exists
+
+I use several coding agents, and each stores a different part of the usage
+picture. Tokimeter brings the numeric metadata already on your machine into one
+private report, so usage, limits, cache savings, and API-equivalent costs are
+easier to understand.
+
+Tokimeter reads usage metadata, not your prompts or responses. Local features
+need no Tokimeter account, provider API key, proxy, telemetry, prompt upload, or
+extra model call. Your data stays on your machine unless you explicitly connect
+the optional hosted dashboard.
+
+## What the local report shows
+
 `npx` downloads Tokimeter into npm's temporary cache and runs one local report.
 It does not permanently install the `tokimeter` command, start an ongoing local
-meter, or enable optional dashboard syncing. It reads the usage metadata your tools already
-write locally and shows cost and tokens by tool, provider, model, project, and
-day — including exact cache read/write accounting and what prompt caching saved
-you. `--days=7`, `--tool cursor`, `--provider xai`, `--json`.
+meter, or enable optional dashboard syncing. It shows cost and tokens by tool,
+provider, model, project, and day — including exact cache read/write accounting
+and what prompt caching saved you. `--days=7`, `--tool cursor`,
+`--provider xai`, and `--json` are supported.
 
 The optional hosted dashboard starts with a 7-day Pro trial. If you do not
 upgrade, cloud sync and hosted access pause at trial end; synced cloud data is
@@ -40,15 +61,16 @@ requests during release testing. Paid Anthropic/OpenAI API routes are
 experimental and test-covered but were not exercised against paid APIs or
 reconciled with provider invoices.
 
+Claude Code and Codex coverage includes local coding sessions created from
+their CLI and desktop surfaces. Regular Claude or ChatGPT chats and
+remote/cloud-only sessions are outside the report when they do not write
+supported usage records to this machine.
+
 `--provider xai` combines direct Grok Build usage with xAI OAuth subscription
 usage through Hermes while preserving each tool in **By tool**. No provider
 account identity or credential is read or stored.
 
-## Install Tokimeter
-
-```bash
-npm install -g tokimeter && "$(npm prefix -g)/bin/tokimeter" setup --auto
-```
+## Setup details
 
 Run `tokimeter setup --auto --dry-run` to print every planned file/process
 action without changing anything. `tokimeter uninstall` restores prior
