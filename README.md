@@ -1,6 +1,6 @@
 <h1>
   <a href="https://github.com/toshipepe/tokimeter/releases/latest"><img src="readme-badges.svg" width="358" height="40" alt="npm v0.5.4, release v0.5.4, MIT license, Node 18+" align="right" hspace="2"></a>
-  <img src="favicon.svg" width="40" alt="Tokimeter logo" align="left" hspace="3">Tokimeter<sub><br></sub>
+  <img src="favicon.svg" width="38" alt="Tokimeter logo" align="left">Tokimeter
 </h1>
 
 **Local-first usage and cost meter for Claude Code, Codex, Cursor, Grok Build,
