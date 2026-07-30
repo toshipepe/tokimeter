@@ -54,10 +54,11 @@ OPENAI_PRICES = [
 # ─── Anthropic ──────────────────────────────────────────────────────────────
 
 ANTHROPIC_PRICES = [
-    # Verified against Anthropic model reference, 2026-07-08.
+    # Verified against Anthropic pricing/model docs, 2026-07-30.
     # cached = cache-read (~0.1x input); cache_write = 5-min-TTL cache-write (~1.25x input).
     ModelPrice("anthropic", "claude-fable-5",          10.00, 50.00, 1.00,
                ("claude-mythos-5",), 12.50),
+    ModelPrice("anthropic", "claude-opus-5",            5.00, 25.00, 0.50, (), 6.25),
     ModelPrice("anthropic", "claude-opus-4-8",          5.00, 25.00, 0.50,
                ("claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5",
                 "claude-opus-4-5-20251101"), 6.25),
@@ -172,6 +173,16 @@ ALL_PRICES = (
 
 # Build lookup: canonical name + all aliases → ModelPrice
 MODEL_PRICING: dict[str, ModelPrice] = {}
+KNOWN_INTERNAL_UNPRICED = {
+    "codex-auto-review": {
+        "provider": "openai",
+        "reason": (
+            "OpenAI identifies this as Codex's internal automatic approval "
+            "reviewer but does not publish a stable per-token price or "
+            "billable model mapping."
+        ),
+    },
+}
 
 for _p in ALL_PRICES:
     MODEL_PRICING[_p.model] = _p
@@ -263,6 +274,15 @@ class Pricer:
         """Describe whether a model price is verified, custom, or unpriced."""
         price = self.get_price(model)
         if price is None:
+            internal = KNOWN_INTERNAL_UNPRICED.get(model)
+            if internal:
+                return {
+                    "source": "internal",
+                    "label": "internal / unpriced",
+                    "authoritative": False,
+                    "provider": internal["provider"],
+                    "reason": internal["reason"],
+                }
             return {
                 "source": "fallback",
                 "label": "fallback / unpriced",

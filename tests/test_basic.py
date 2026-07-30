@@ -77,6 +77,46 @@ def test_pricing_aliases():
     print("✓ test_pricing_aliases passed")
 
 
+def test_pricing_current_recorded_models():
+    """Price published models and keep internal routing identifiers honest."""
+    pricer = Pricer()
+
+    in_cost, out_cost, total = pricer.price_call(
+        "claude-opus-5",
+        1_000_000,
+        1_000_000,
+        cached_tokens=500_000,
+        cache_creation_tokens=200_000,
+        cached_included_in_input=False,
+    )
+    assert (in_cost, out_cost, total) == (6.5, 25.0, 31.5)
+    assert pricer.get_price_source("claude-opus-5") == {
+        "source": "verified",
+        "label": "verified built-in",
+        "authoritative": True,
+    }
+
+    assert pricer.price_call("codex-auto-review", 1_000_000, 1_000_000) == (0.0, 0.0, 0.0)
+    source = pricer.get_price_source("codex-auto-review")
+    assert source["source"] == "internal"
+    assert source["label"] == "internal / unpriced"
+    assert source["authoritative"] is False
+    assert source["provider"] == "openai"
+
+    tracker = Tracker()
+    tracker.record(
+        model="codex-auto-review",
+        input_tokens=1_000_000,
+        output_tokens=1_000_000,
+        provider="openai",
+    )
+    report = tracker.get_report()
+    assert report.total_cost == 0.0
+    assert report.unpriced_calls == 1
+    assert report.pricing_sources == {"internal": 1}
+    print("✓ test_pricing_current_recorded_models passed")
+
+
 def test_tracker_memory():
     """Test in-memory tracking."""
     tracker = Tracker()  # in-memory mode
@@ -921,6 +961,7 @@ def run_all():
         test_pricing_cached,
         test_pricing_unknown_model,
         test_pricing_aliases,
+        test_pricing_current_recorded_models,
         test_tracker_memory,
         test_tracker_separates_unknown_pricing,
         test_tracker_sqlite,

@@ -343,6 +343,7 @@ def _print_report(report, args):
             "custom": "custom local",
             "reported": "provider/tool reported",
             "fallback": "fallback / unpriced",
+            "internal": "internal / unpriced",
         }
         source_text = " · ".join(
             f"{labels.get(source, source)} {count}"

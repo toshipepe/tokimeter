@@ -2704,8 +2704,13 @@ async function runPricingCommand(pricingArgs) {
     }
     const source = getPricingSource(model);
     if (source.confidence === 'fallback') {
-      console.log(`  ${model}: unpriced. A rough $2/$8-per-1M fallback is shown separately and excluded from priced totals.`);
-      console.log(`  Add custom pricing to include this model in priced totals.`);
+      if (source.source === 'internal') {
+        console.log(`  ${model}: known internal model identifier, but no stable public per-token price or billable model mapping is available.`);
+        console.log(`  It remains unpriced and excluded from priced totals; no public model alias is guessed.`);
+      } else {
+        console.log(`  ${model}: unpriced. A rough $2/$8-per-1M fallback is shown separately and excluded from priced totals.`);
+        console.log(`  Add custom pricing to include this model in priced totals.`);
+      }
     } else {
       console.log(`  ${model}: ${source.confidence} pricing via ${source.source}${source.model ? ` (${source.model})` : ''}`);
     }
@@ -5290,6 +5295,7 @@ function normalizePricingConfidence(value) {
   if (value === 'feed' || value === 'community') return 'community feed';
   if (value === 'custom') return 'custom local';
   if (value === 'reported') return 'provider/tool reported';
+  if (value === 'internal') return 'internal / unpriced';
   return 'fallback / unpriced';
 }
 
