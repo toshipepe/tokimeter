@@ -92,3 +92,79 @@ test('connect exchanges a one-time code, protects the key, and backfills metadat
   assert.equal(received[1].payload.events[0].project, 'private-project');
   assert.equal(received[1].payload.events[0].prompt, undefined);
 });
+
+test('reconnect continues from the last successful local sync cursor', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'tokimeter-reconnect-'));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  await chmod(root, 0o700);
+  const privateKey = 'tmk_live_reconnect-secret-never-print';
+  const received = [];
+  const server = http.createServer(async (req, res) => {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    const payload = JSON.parse(body || '{}');
+    received.push({ path: req.url, payload });
+    res.setHeader('Content-Type', 'application/json');
+    if (payload.action === 'exchange') {
+      res.end(JSON.stringify({
+        api_key: privateKey,
+        ingest_url: `http://127.0.0.1:${server.address().port}/ingest`,
+        device: { name: 'Reconnected Mac' },
+      }));
+      return;
+    }
+    res.statusCode = 201;
+    res.end(JSON.stringify({ ok: true, accepted: payload.events?.length || 0 }));
+  });
+  await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen));
+  t.after(() => new Promise((resolveClose) => server.close(resolveClose)));
+
+  const now = Date.now();
+  await writeFile(join(root, 'calls.jsonl'), [
+    {
+      externalId: 'already-synced-old-event',
+      timestamp: now - 20 * 86400 * 1000,
+      provider: 'openai',
+      model: 'gpt-test',
+      tool: 'codex',
+      inputTokens: 10,
+    },
+    {
+      externalId: 'missing-recent-event',
+      timestamp: now - 86400 * 1000,
+      provider: 'openai',
+      model: 'gpt-test',
+      tool: 'codex',
+      inputTokens: 20,
+    },
+  ].map((event) => JSON.stringify(event)).join('\n') + '\n');
+  await writeFile(join(root, 'cloud-sync-state.json'), JSON.stringify({
+    lastSuccessAt: now - 2 * 86400 * 1000,
+  }) + '\n');
+
+  const env = {
+    ...process.env,
+    HOME: root,
+    TOKIMETER_DATA_DIR: root,
+    CODEX_HOME: join(root, 'codex'),
+    CLAUDE_HOME: join(root, 'claude'),
+    GROK_HOME: join(root, 'grok'),
+    HERMES_HOME: join(root, 'hermes'),
+    CURSOR_HOME: join(root, 'cursor'),
+    OPENCODE_DATA_DIR: join(root, 'opencode'),
+    CLINE_DATA_DIR: join(root, 'cline'),
+  };
+  await execFileAsync(process.execPath, [
+    cliPath,
+    'connect',
+    'tmc_abcdefghijklmnopqrstuvwxyz654321',
+    `--url=http://127.0.0.1:${server.address().port}/device-connect`,
+    '--no-restart',
+  ], { env });
+
+  assert.equal(received.length, 2);
+  assert.deepEqual(
+    received[1].payload.events.map((event) => event.external_id),
+    ['missing-recent-event'],
+  );
+});

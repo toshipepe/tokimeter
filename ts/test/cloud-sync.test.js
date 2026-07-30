@@ -8,7 +8,9 @@ import {
   cloudResponseResult,
   eventToCloudPayload,
   hashedSessionId,
+  newestFirstCloudEvents,
   projectForCloud,
+  sendCloudBatchWithRetry,
   stableCloudEventId,
 } from '../packages/proxy/src/cloud-sync.js';
 
@@ -59,6 +61,50 @@ test('cloud sync: batches never exceed the backend maximum', () => {
   assert.deepEqual(chunks.map((chunk) => chunk.length), [250, 250, 1]);
 });
 
+test('cloud sync: reconnect backfills send newest metadata first', () => {
+  const ordered = newestFirstCloudEvents([
+    { externalId: 'oldest', timestamp: 100 },
+    { externalId: 'newest', timestamp: 300 },
+    { externalId: 'middle', timestamp: 200 },
+  ]);
+  assert.deepEqual(ordered.map((event) => event.externalId), ['newest', 'middle', 'oldest']);
+});
+
+test('cloud sync: a foreground quota response waits and resumes the same batch', async () => {
+  let attempts = 0;
+  const waits = [];
+  const result = await sendCloudBatchWithRetry(async () => {
+    attempts += 1;
+    if (attempts === 1) {
+      throw Object.assign(new Error('Ingest rate limit exceeded'), {
+        status: 429,
+        rateLimited: true,
+        retryAfterMs: 1250,
+      });
+    }
+    return { accepted: 3 };
+  }, {
+    maxQuotaRetries: 2,
+    wait: async (milliseconds) => { waits.push(milliseconds); },
+  });
+  assert.deepEqual(result, { accepted: 3 });
+  assert.equal(attempts, 2);
+  assert.deepEqual(waits, [1250]);
+});
+
+test('cloud sync: background quota responses return promptly for the next scan', async () => {
+  await assert.rejects(
+    sendCloudBatchWithRetry(async () => {
+      throw Object.assign(new Error('Ingest rate limit exceeded'), {
+        status: 429,
+        rateLimited: true,
+        retryAfterMs: 60000,
+      });
+    }, { maxQuotaRetries: 0 }),
+    /Ingest rate limit exceeded/,
+  );
+});
+
 test('cloud sync: trial expiry becomes a durable pause instead of a retryable failure', () => {
   const result = cloudResponseResult(402, {
     code: 'trial_expired',
@@ -79,6 +125,16 @@ test('cloud sync: trial expiry becomes a durable pause instead of a retryable fa
 test('cloud sync: unrelated payment-required responses are not treated as a trial pause', () => {
   assert.equal(cloudResponseResult(402, { code: 'card_required' }).accessPaused, false);
   assert.equal(cloudResponseResult(503, { code: 'entitlement_unavailable' }).accessPaused, false);
+});
+
+test('cloud sync: Tokimeter quota responses preserve the retry delay', () => {
+  const result = cloudResponseResult(429, {
+    code: 'ingest_rate_limited',
+    error: 'Ingest rate limit exceeded',
+    retry_after_seconds: 17,
+  });
+  assert.equal(result.rateLimited, true);
+  assert.equal(result.retryAfterMs, 17000);
 });
 
 test('cloud sync: a deleted or revoked device key is terminal and does not enter the retry queue', () => {
