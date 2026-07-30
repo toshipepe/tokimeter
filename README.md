@@ -376,14 +376,20 @@ CSV is the hosted multi-member allocation export.
 To connect the hosted dashboard, sign in at
 [tokimeter.com/app](https://tokimeter.com/app), choose **Connect this device**,
 and paste its one-time `tokimeter connect tmc_...` command into a terminal.
-Tokimeter backfills 30 days and then syncs new metadata from every supported
-local reader in the background. `tokimeter sync --days=30` requests a manual
-backfill, and connected devices can be revoked from the dashboard.
-Failed uploads retry with bounded exponential backoff. An expired trial or
-revoked device key pauses background retries so Tokimeter does not repeatedly
-call the hosted service; `tokimeter sync` performs an immediate reactivation
-check after an upgrade. `tokimeter doctor` shows the cloud state plus pending
-and dropped cloud-event counts without opening local state files.
+A first connection backfills 30 days and then syncs new metadata from every
+supported local reader in the background. A reconnect continues from the last
+successful local sync instead of restarting that full backfill.
+`tokimeter sync --days=30` requests a manual backfill. Large replays send recent
+activity first and resume across bounded ingest windows; already-stored event
+IDs do not consume the new-event allowance. Connected devices can be filtered
+or revoked from the dashboard, while older history created before device
+attribution appears as legacy/unassigned.
+
+Failed background uploads retry with bounded exponential backoff. An expired
+trial or revoked device key pauses background retries so Tokimeter does not
+repeatedly call the hosted service; `tokimeter sync` performs an immediate
+reactivation check after an upgrade. `tokimeter doctor` shows the cloud state
+plus pending and dropped cloud-event counts without opening local state files.
 
 Project privacy defaults to the final folder name only. Use
 `tokimeter config set cloud.projectMode off` to omit projects completely, or

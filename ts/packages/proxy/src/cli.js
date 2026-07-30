@@ -36,6 +36,8 @@ import {
   cloudPauseState,
   cloudResponseResult,
   eventToCloudPayload,
+  newestFirstCloudEvents,
+  sendCloudBatchWithRetry,
 } from './cloud-sync.js';
 
 const {
@@ -2823,15 +2825,25 @@ async function runCloudSync(syncArgs = [], { afterConnect = false } = {}) {
       : 2 * 86400 * 1000;
   const projectMode = cloudProjectMode(syncArgs);
   const events = collectLocalUsageEvents({ maxAgeMs });
-  const payloads = events.map((event) => eventToCloudPayload(event, { projectMode }));
+  // Replays prioritize current activity. If a large backfill is interrupted,
+  // the dashboard still catches up from newest to oldest on the next scan.
+  const payloads = newestFirstCloudEvents(events)
+    .map((event) => eventToCloudPayload(event, { projectMode }));
   const batches = chunkCloudEvents(payloads, 200);
   let sent = 0;
   try {
     for (const batch of batches) {
-      const result = await fetchCloudJson(cloudEventsUrl(cloudUrl), {
+      const result = await sendCloudBatchWithRetry(() => fetchCloudJson(cloudEventsUrl(cloudUrl), {
         apiKey: cloudKey,
         body: { contract_version: 1, events: batch },
         timeoutMs: 30000,
+      }), {
+        // Interactive sync/connect can finish a large backfill across quota
+        // windows. Background scans return promptly and resume newest-first.
+        maxQuotaRetries: quiet ? 0 : 10,
+        onQuotaWait: quiet ? null : (waitMs) => {
+          console.log(`  Cloud ingest is catching up; resuming in ${Math.ceil(waitMs / 1000)}s…`);
+        },
       });
       sent += Number(result.accepted ?? batch.length);
     }
@@ -2899,7 +2911,10 @@ async function runConnect(connectArgs) {
   console.log(`  ✓ Connected${result.device?.name ? ` as ${result.device.name}` : ''}`);
   console.log('    Only usage metadata syncs. Prompts, responses, code, account identity, and full paths are excluded.');
 
-  await runCloudSync(['--days=30'], { afterConnect: true });
+  // A reconnect continues from the last successful local cursor. A genuinely
+  // new installation still receives the documented 30-day first backfill.
+  const priorSync = readCloudSyncState();
+  await runCloudSync(Number(priorSync.lastSuccessAt) > 0 ? [] : ['--days=30'], { afterConnect: true });
   if (!connectArgs.includes('--no-restart')) {
     await stopProxy();
     await sleep(300);
