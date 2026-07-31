@@ -8,6 +8,7 @@ import {
   readClaudeUsageEvents,
   readCodexTokenEvents,
   readCodexRateLimitSnapshots,
+  readCopilotOtelEvents,
   readAiderHistoryEvents,
   readGrokUsageEvents,
   readGrokSessionMeta,
@@ -47,6 +48,7 @@ const CLAUDE_FIXTURE = join(FIXTURES, 'claude-transcript.jsonl');
 const CODEX_FIXTURE = join(FIXTURES, 'codex-rollout.jsonl');
 const CLAUDE_EDGE_FIXTURE = join(FIXTURES, 'claude-edge.jsonl');
 const CODEX_EDGE_FIXTURE = join(FIXTURES, 'codex-edge.jsonl');
+const COPILOT_FIXTURE = join(FIXTURES, 'copilot-rollout.jsonl');
 
 const TMP = mkdtempSync(join(tmpdir(), 'tokimeter-parsers-'));
 function tmpFile(name, contents) {
@@ -128,6 +130,60 @@ test('codex rollout: externalIds are unique per line', () => {
   const events = readCodexTokenEvents(CODEX_FIXTURE);
   const ids = events.map(e => e.externalId);
   assert.equal(new Set(ids).size, ids.length);
+});
+
+test('copilot rollout: parses usage spans', () => {
+  const events = readCopilotOtelEvents(COPILOT_FIXTURE);
+
+  assert.equal(events.length, 2);
+
+  const first = events[0];
+
+  assert.equal(first.provider, 'github');
+  assert.equal(first.tool, 'copilot');
+  assert.equal(first.source, 'copilot-otel');
+  assert.equal(first.confidence, 'exact');
+
+  assert.equal(first.model, 'gpt-5.5');
+
+  assert.equal(first.inputTokens, 1200);
+  assert.equal(first.cachedTokens, 300);
+  assert.equal(first.outputTokens, 120);
+  assert.equal(first.reasoningTokens, 40);
+
+  assert.equal(first.sessionId, 'conversation-1');
+});
+
+test('copilot rollout: invoke_agent is shadowed by chat', () => {
+  const events = readCopilotOtelEvents(COPILOT_FIXTURE);
+
+  assert.equal(events.length, 2);
+
+  const ids = events.map(e => e.externalId);
+
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test('copilot rollout: models and sessions are preserved', () => {
+  const events = readCopilotOtelEvents(COPILOT_FIXTURE);
+
+  assert.equal(events[0].model, 'gpt-5.5');
+  assert.equal(events[1].model, 'gpt-5.4-mini');
+
+  assert.equal(events[0].sessionId, 'conversation-1');
+  assert.equal(events[1].sessionId, 'conversation-2');
+});
+
+test('copilot rollout: respects sinceMs', () => {
+  const events = readCopilotOtelEvents(
+    COPILOT_FIXTURE,
+    {
+      sinceMs: Date.parse('2026-07-08T11:01:00.000Z'),
+    },
+  );
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].model, 'gpt-5.4-mini');
 });
 
 test('claude edge fixture: survives nulls, scalars, missing fields, partial writes', () => {
