@@ -736,22 +736,25 @@ def test_cli_proxy_delegation_detection():
 
 
 def test_proxy_setup_installs_command_shims():
-    """Test that auto setup creates tokimeter/tm helper shims as well as tool shims."""
-    with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as codex_home:
+    """Test shims survive a removed setup-time Node installation."""
+    with tempfile.TemporaryDirectory() as home_root, tempfile.TemporaryDirectory() as codex_home:
+        home = os.path.join(home_root, "user's home with spaces")
+        os.makedirs(home)
         env = os.environ.copy()
         env["HOME"] = home
         env["CODEX_HOME"] = codex_home
+        cli_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "ts",
+            "packages",
+            "proxy",
+            "src",
+            "cli.js",
+        )
         result = subprocess.run(
             [
                 "node",
-                os.path.join(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                    "ts",
-                    "packages",
-                    "proxy",
-                    "src",
-                    "cli.js",
-                ),
+                cli_path,
                 "setup",
                 "codex",
                 "--auto",
@@ -767,6 +770,82 @@ def test_proxy_setup_installs_command_shims():
             path = os.path.join(shim_dir, command)
             assert os.path.exists(path), f"Missing shim: {path}"
             assert os.access(path, os.X_OK), f"Shim is not executable: {path}"
+
+            with open(path, encoding="utf-8") as f:
+                script = f.read()
+            assert "command -v tokimeter" in script
+            assert 'if [ -f "$TOKIMETER_SETUP_CLI" ]' in script
+            assert "could not find the active Tokimeter installation" in script
+
+            # Reproduce the reported failure: the Node-version-specific path
+            # that existed during setup has disappeared. The launcher must use
+            # the currently active global Tokimeter command instead.
+            script = "\n".join(
+                "TOKIMETER_SETUP_CLI='/removed/node/v-old/lib/node_modules/tokimeter/src/cli.js'"
+                if line.startswith("TOKIMETER_SETUP_CLI=") else line
+                for line in script.splitlines()
+            ) + "\n"
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(script)
+            os.chmod(path, 0o755)
+
+        current_bin = os.path.join(home, "current-node-bin")
+        os.makedirs(current_bin)
+        current_tokimeter = os.path.join(current_bin, "tokimeter")
+        with open(current_tokimeter, "w", encoding="utf-8") as f:
+            f.write("#!/bin/sh\nprintf 'current:%s\\n' \"$*\"\n")
+        os.chmod(current_tokimeter, 0o755)
+
+        upgraded_env = env.copy()
+        upgraded_env["PATH"] = os.pathsep.join([shim_dir, current_bin, "/usr/bin", "/bin"])
+        repaired_cli = subprocess.run(
+            [os.path.join(shim_dir, "tokimeter"), "report", "--json"],
+            env=upgraded_env,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        assert repaired_cli.returncode == 0, repaired_cli.stderr
+        assert repaired_cli.stdout.strip() == "current:report --json"
+
+        repaired_tool = subprocess.run(
+            [os.path.join(shim_dir, "codex"), "--version"],
+            env=upgraded_env,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        assert repaired_tool.returncode == 0, repaired_tool.stderr
+        assert repaired_tool.stdout.strip() == "current:codex --version"
+
+        missing_env = env.copy()
+        missing_env["PATH"] = os.pathsep.join([shim_dir, "/bin"])
+        missing = subprocess.run(
+            [os.path.join(shim_dir, "tokimeter"), "doctor"],
+            env=missing_env,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        assert missing.returncode == 127
+        assert "A Node version was probably switched or removed" in missing.stderr
+        assert "MODULE_NOT_FOUND" not in missing.stderr
+
+        with open(os.path.join(shim_dir, "tokimeter"), "w", encoding="utf-8") as f:
+            f.write(
+                "#!/bin/sh\n"
+                "exec node \"/removed/node/v-old/lib/node_modules/tokimeter/src/cli.js\" \"$@\"\n"
+            )
+        os.chmod(os.path.join(shim_dir, "tokimeter"), 0o755)
+        doctor = subprocess.run(
+            ["node", cli_path, "doctor"],
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        assert doctor.returncode == 0, doctor.stderr
+        assert "legacy Node-version-pinned launcher" in doctor.stdout
     print("✓ test_proxy_setup_installs_command_shims passed")
 
 

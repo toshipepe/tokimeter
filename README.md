@@ -88,6 +88,18 @@ usage meter up to date and warns against budgets you choose. Calling the
 executable by its full npm location makes the first run reliable even when
 npm's global executable directory is not yet on zsh's `PATH`.
 
+Tokimeter's generated launchers resolve the active global installation each
+time, so upgrading Tokimeter or switching Node versions does not leave them
+pinned to an old `nvm`/`fnm`/`asdf` directory. A newly selected Node version
+may still need its own global Tokimeter install. If a launcher created by an
+older Tokimeter release fails with `MODULE_NOT_FOUND`, repair it once with:
+
+```bash
+npm install -g tokimeter
+"$(npm prefix -g)/bin/tokimeter" setup --auto
+hash -r
+```
+
 ## Am I about to hit my limit?
 
 Tokimeter groups locally observed usage into **5-hour** and **7-day** views for
