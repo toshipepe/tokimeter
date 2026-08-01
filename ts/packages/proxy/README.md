@@ -84,6 +84,18 @@ Close and reopen your terminal when setup finishes. Then keep using `codex`,
 its full npm location avoids the common macOS/zsh case where npm's global
 executable directory is not yet on `PATH`; setup configures future terminals.
 
+Generated launchers resolve the active global Tokimeter installation at run
+time rather than saving a Node-version-specific package path. Switching Node
+versions is therefore safe once Tokimeter is installed for the newly active
+Node version. To migrate a launcher written by an older release after a
+`MODULE_NOT_FOUND` error:
+
+```bash
+npm install -g tokimeter
+"$(npm prefix -g)/bin/tokimeter" setup --auto
+hash -r
+```
+
 ## Limits: the 5-hour window
 
 ```bash
