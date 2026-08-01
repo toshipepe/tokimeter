@@ -35,6 +35,7 @@ const EXPECTED_PACKAGE_FILES = Object.freeze([
   'src/core/pricing.js',
   'src/core/tracker.js',
   'src/parsers.js',
+  'src/provider-protocol.js',
   'src/server.js',
 ]);
 

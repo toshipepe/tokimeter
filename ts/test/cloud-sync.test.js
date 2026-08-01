@@ -29,6 +29,7 @@ test('cloud sync: metadata allowlist drops prompts, responses, account data, and
     totalCost: 0.12,
     project: '/Users/private/Desktop/secret-client',
     sessionId: 'raw-session-secret',
+    providerRequestId: 'resp_provider_private_001',
     prompt: 'never upload this prompt',
     response: 'never upload this response',
     email: 'person@example.com',
@@ -40,7 +41,10 @@ test('cloud sync: metadata allowlist drops prompts, responses, account data, and
   assert.equal(payload.input_tokens, 123);
   assert.equal(payload.contract_version, 1);
   assert.equal(payload.cache_creation_tokens, 3);
-  assert.doesNotMatch(encoded, /never upload|person@example|\/Users\/private|raw-session-secret/);
+  assert.doesNotMatch(
+    encoded,
+    /never upload|person@example|\/Users\/private|raw-session-secret|resp_provider_private_001/,
+  );
 });
 
 test('cloud sync: project privacy supports basename, off, and explicit full modes', () => {

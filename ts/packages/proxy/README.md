@@ -60,7 +60,7 @@ Live-verified readers in this release: Claude Code CLI/Desktop, Codex
 CLI/Desktop, Cursor CLI/Desktop Agent, Grok Build, Hermes, opencode 1.17.18,
 and Cline CLI 3.0.39.
 GitHub Copilot CLI and Aider are fixture-tested but were not completed as live
-requests during release testing. Paid Anthropic/OpenAI API routes are
+requests during release testing. Paid Anthropic/OpenAI/Venice API routes are
 experimental and test-covered but were not exercised against paid APIs or
 reconciled with provider invoices.
 
@@ -72,6 +72,28 @@ supported usage records to this machine.
 `--provider xai` combines direct Grok Build usage with xAI OAuth subscription
 usage through Hermes while preserving each tool in **By tool**. No provider
 account identity or credential is read or stored.
+
+## Venice through Codex (experimental)
+
+Start the proxy with `tokimeter start`, export the API key as
+`VENICE_API_KEY`, and add this to user-level `~/.codex/config.toml`:
+
+```toml
+model = "replace-with-current-venice-model-id"
+model_provider = "tokimeter-venice"
+
+[model_providers.tokimeter-venice]
+name = "Venice via Tokimeter"
+base_url = "http://localhost:8788/venice"
+env_key = "VENICE_API_KEY"
+wire_api = "responses"
+```
+
+Do not append `/v1` to the local base. Codex ignores provider and auth settings
+from project `.codex/config.toml`, so keep this definition in the user-level
+file. Tokimeter stores token/model metadata and the provider request ID locally,
+never the API key, prompt, or response. The request ID is excluded from optional
+Pro sync. Unknown Venice models remain outside authoritative priced totals.
 
 ## Setup details
 
