@@ -199,3 +199,59 @@ test('report JSON separates known totals from unknown-model rough estimates', (t
   assert.equal(report.pricingSources.find((row) => row.name === 'verified built-in').cost, 1);
   assert.equal(report.pricingSources.find((row) => row.name === 'fallback / unpriced').roughEstimateCost, 10);
 });
+
+test('report JSON discovers OpenHuman active-user costs and preserves cost provenance', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'tokimeter-openhuman-report-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const userId = '50000000-0000-4000-8000-000000000001';
+  const openHumanRoot = join(root, '.openhuman');
+  const stateDir = join(openHumanRoot, 'users', userId, 'workspace', 'state');
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(join(openHumanRoot, 'active_user.toml'), `user_id = "${userId}"\n`);
+  const timestamp = new Date().toISOString();
+  const records = [
+    {
+      id: '60000000-0000-4000-8000-000000000001',
+      usage: {
+        model: 'openai/gpt-5-mini', input_tokens: 100, output_tokens: 20,
+        total_tokens: 120, cached_input_tokens: 50, cache_creation_tokens: 0,
+        reasoning_tokens: 5, cost_usd: 0.01, cost_source: 'provider_charged', timestamp,
+      },
+      session_id: '70000000-0000-4000-8000-000000000001',
+    },
+    {
+      id: '60000000-0000-4000-8000-000000000002',
+      usage: {
+        model: 'chat-v1', input_tokens: 200, output_tokens: 40,
+        total_tokens: 240, cached_input_tokens: 0, cache_creation_tokens: 0,
+        reasoning_tokens: 0, cost_usd: 0.02, cost_source: 'estimated', timestamp,
+      },
+      session_id: '70000000-0000-4000-8000-000000000002',
+    },
+  ];
+  writeFileSync(join(stateDir, 'costs.jsonl'), `${records.map(JSON.stringify).join('\n')}\n`);
+
+  const output = execFileSync(process.execPath, [CLI, 'report', '--days=1', '--tool=openhuman', '--json'], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      HOME: root,
+      CLAUDE_HOME: join(root, '.claude'),
+      CODEX_HOME: join(root, '.codex'),
+      CURSOR_HOME: join(root, '.cursor'),
+      GROK_HOME: join(root, '.grok'),
+      HERMES_HOME: join(root, '.hermes'),
+      TOKIMETER_DATA_DIR: join(root, '.tokimeter'),
+      TOKIMETER_PRICING_FILE: join(root, '.tokimeter', 'pricing.json'),
+      TOKIMETER_PRICING_FEED_FILE: join(root, '.tokimeter', 'pricing-feed.json'),
+    },
+  });
+  const report = JSON.parse(output);
+  assert.equal(report.totals.calls, 2);
+  assert.equal(report.totals.cost, 0.03);
+  assert.equal(report.byTool[0].name, 'openhuman');
+  assert.equal(report.pricingSources.find((row) => row.name === 'provider/tool reported').cost, 0.01);
+  assert.equal(report.pricingSources.find((row) => row.name === 'tool estimated').cost, 0.02);
+  assert.deepEqual(report.byProvider.map((row) => row.name).sort(), ['OpenAI', 'openhuman']);
+  assert.doesNotMatch(output, new RegExp(userId));
+});

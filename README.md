@@ -183,6 +183,7 @@ the report only observes.
 | Cursor CLI/Desktop Agent | Live verified | Status-line and stop hooks after `tokimeter setup cursor`; CSV import for classic editor chat | Exact per-turn usage after hook setup, local windows, and user-budget warnings. Earlier hookless turns are not reconstructed. |
 | Grok Build | Live verified | Local `~/.grok/logs`; optional stop hook for alarms | Exact recorded per-turn tokens and `~` cost. Local windows and user budgets, not a claimed vendor quota. |
 | Hermes | Live verified | Local `~/.hermes` database; no setup for reports | Provider-recorded session totals and billed cost when present; otherwise priced `~` estimates. |
+| OpenHuman | Fixture tested | Active workspace `state/costs.jsonl`; no setup for reports | Exact recorded token buckets. Provider-charged cost stays reported; OpenHuman estimates stay visibly estimated. Memory and transcript data are never read. |
 | opencode | Live verified with 1.17.18 | Local message files/database; no setup for reports | Recorded token counts and request-time cost when present; otherwise priced `~` estimates. |
 | Cline | Live verified with CLI 3.0.39 + Codex OAuth | Local task/session history; no setup for reports | Numeric usage and Cline's request-time cost when present. Prompt and response content are ignored. |
 | Copilot CLI / Aider | Fixture tested | Copilot file exporter or Aider history import/proxy | Parser, deduplication, accounting, and privacy behavior pass fixtures; not claimed as live-verified in this release. |
@@ -215,6 +216,18 @@ subagents, and self-hosted Telegram bridging, and sessions are labeled by
 source in the report. (Only Nous's fully hosted bots leave no local data to
 read.) `--tool hermes` scopes to it; when Hermes reports its own billed cost,
 Tokimeter uses that instead of estimating.
+
+**OpenHuman**: tracked automatically from the active workspace's append-only
+`state/costs.jsonl` ledger (normally under `~/.openhuman/users/<local-id>/workspace`;
+`OPENHUMAN_WORKSPACE` is honored). Tokimeter reads only numeric token, model,
+timestamp, and cost fields. It never reads OpenHuman Memory Trees, wiki pages,
+run journals, transcripts, OAuth state, or credentials, and it never retains
+the local OpenHuman account id used to find the active workspace. A
+`provider_charged` value is shown as reported cost; OpenHuman's own
+`estimated` value remains labeled as an estimate. Bare managed aliases such
+as `chat-v1` stay attributed to OpenHuman rather than guessing an underlying
+provider. Use `--tool openhuman` to scope a report. This reader is fixture
+tested, not claimed as live verified.
 
 **opencode**: tracked automatically, zero setup. opencode stores per-message
 token counts locally (`~/.local/share/opencode`, or `OPENCODE_DATA_DIR`);

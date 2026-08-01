@@ -8,7 +8,7 @@
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 async function importCorePricing() {
   try {
@@ -617,7 +617,7 @@ export function analyzeLogFileFormat(filePath, kind) {
       const known = (Number(usage.input_tokens) || 0) + claudeCacheCreationTokens(usage)
         + (Number(usage.cache_read_input_tokens) || 0) + (Number(usage.output_tokens) || 0);
       if (known > 0) usageExtracted++;
-    } else {
+    } else if (kind === 'codex') {
       if (obj.type !== 'event_msg' || !obj.payload || obj.payload.type !== 'token_count') continue;
       const info = obj.payload.info;
       if (!info || typeof info !== 'object' || (!hasPositiveNumber(info.last_token_usage) && !hasPositiveNumber(info.total_token_usage))) continue;
@@ -625,6 +625,10 @@ export function analyzeLogFileFormat(filePath, kind) {
       const usage = info.last_token_usage && typeof info.last_token_usage === 'object' ? info.last_token_usage : {};
       const known = (Number(usage.input_tokens) || 0) + (Number(usage.output_tokens) || 0) + (Number(usage.cached_input_tokens) || 0);
       if (known > 0) usageExtracted++;
+    } else if (kind === 'openhuman') {
+      if (!obj.usage || typeof obj.usage !== 'object') continue;
+      usageCandidates++;
+      if (openHumanCostRecordToEvent(obj)) usageExtracted++;
     }
   }
 
@@ -643,6 +647,132 @@ export function analyzeLogFileFormat(filePath, kind) {
   }
 
   return { lines: rawLines.length, records, malformed, truncatedTail, usageCandidates, usageExtracted, ok, reason };
+}
+
+// ─── OpenHuman cost ledger (~/.openhuman/.../workspace/state/costs.jsonl) ──
+// OpenHuman's append-only ledger contains numeric usage/cost metadata. Memory
+// trees, run journals, transcripts, configuration, and OAuth files are never
+// read by this integration.
+
+const OPENHUMAN_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function nonNegativeNumber(value, { integer = false } = {}) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
+  if (integer && !Number.isInteger(value)) return null;
+  return value;
+}
+
+function openHumanProvider(model) {
+  const slash = model.indexOf('/');
+  if (slash <= 0) return 'openhuman';
+  const prefix = model.slice(0, slash).toLowerCase();
+  return /^[a-z0-9][a-z0-9._-]*$/.test(prefix) ? prefix : 'openhuman';
+}
+
+export function openHumanCostRecordToEvent(record, { sinceMs = 0 } = {}) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+  if (typeof record.id !== 'string' || !OPENHUMAN_UUID.test(record.id)) return null;
+  const usage = record.usage;
+  if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return null;
+
+  const model = typeof usage.model === 'string' ? usage.model.trim() : '';
+  const timestamp = typeof usage.timestamp === 'string' ? Date.parse(usage.timestamp) : NaN;
+  if (!model || !Number.isFinite(timestamp) || timestamp <= 0 || (sinceMs && timestamp < sinceMs)) return null;
+
+  const inputTokens = nonNegativeNumber(usage.input_tokens, { integer: true });
+  const outputTokens = nonNegativeNumber(usage.output_tokens, { integer: true });
+  const cachedTokens = nonNegativeNumber(usage.cached_input_tokens, { integer: true });
+  const cacheCreationTokens = nonNegativeNumber(usage.cache_creation_tokens, { integer: true });
+  const reasoningTokens = nonNegativeNumber(usage.reasoning_tokens, { integer: true });
+  const totalTokens = nonNegativeNumber(usage.total_tokens, { integer: true });
+  const cost = nonNegativeNumber(usage.cost_usd);
+  if ([inputTokens, outputTokens, cachedTokens, cacheCreationTokens, reasoningTokens, totalTokens, cost].includes(null)) return null;
+  if (inputTokens + outputTokens + cachedTokens + cacheCreationTokens + reasoningTokens + cost === 0) return null;
+
+  if (usage.cost_source !== 'provider_charged' && usage.cost_source !== 'estimated') return null;
+  const costSource = usage.cost_source;
+  const sessionId = typeof record.session_id === 'string' && OPENHUMAN_UUID.test(record.session_id)
+    ? record.session_id
+    : '';
+  return {
+    timestamp,
+    provider: openHumanProvider(model),
+    model,
+    inputTokens,
+    outputTokens,
+    cachedTokens,
+    cacheCreationTokens,
+    reasoningTokens,
+    // OpenHuman normalizes cached input as a subset of input_tokens.
+    cachedDisjoint: false,
+    totalCost: cost,
+    pricingConfidence: cost > 0
+      ? (costSource === 'provider_charged' ? 'reported' : 'estimated')
+      : getPricingSource(model).confidence,
+    costSource: cost > 0 && costSource === 'provider_charged' ? 'provider_charged' : 'estimated',
+    tool: 'openhuman',
+    source: 'openhuman-cost-record',
+    confidence: 'exact',
+    sessionId,
+    externalId: `openhuman-cost:${record.id.toLowerCase()}`,
+  };
+}
+
+export function readOpenHumanCostEvents(filePath, { sinceMs = 0 } = {}) {
+  let text = '';
+  try {
+    text = readFileSync(filePath, 'utf8');
+  } catch {
+    return [];
+  }
+  const events = [];
+  const seen = new Set();
+  for (const rawLine of text.split(/\r?\n/)) {
+    const event = openHumanCostRecordToEvent(parseRecord(rawLine), { sinceMs });
+    if (!event || seen.has(event.externalId)) continue;
+    seen.add(event.externalId);
+    events.push(event);
+  }
+  return events;
+}
+
+function markerString(text, key) {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = String(text || '').match(new RegExp(`^\\s*${escaped}\\s*=\\s*(["'])([^"'\\r\\n]*)\\1\\s*(?:#.*)?$`, 'm'));
+  return match ? match[2].trim() : '';
+}
+
+// Return only workspace directories. The active user id is used for local
+// discovery and is never copied into an event. Reject traversal before path
+// construction and verify the resolved path remains under users/.
+export function openHumanWorkspaceCandidates({
+  homeDir,
+  explicitWorkspace = '',
+  activeUserText = '',
+  activeWorkspaceText = '',
+} = {}) {
+  const home = resolve(String(homeDir || ''));
+  const root = join(home, '.openhuman');
+  const usersRoot = join(root, 'users');
+  const candidates = [];
+  const add = (value) => {
+    if (!value) return;
+    const path = resolve(String(value));
+    if (!candidates.includes(path)) candidates.push(path);
+  };
+
+  add(explicitWorkspace);
+  const userId = markerString(activeUserText, 'user_id');
+  if (/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(userId) && userId !== '.' && userId !== '..') {
+    const workspace = resolve(usersRoot, userId, 'workspace');
+    const rel = relative(usersRoot, workspace);
+    if (rel && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel)) add(workspace);
+  }
+  const activeWorkspace = markerString(activeWorkspaceText, 'config_dir');
+  if (activeWorkspace) add(activeWorkspace);
+  add(join(usersRoot, 'local', 'workspace'));
+  add(join(root, 'workspace'));
+  return candidates;
 }
 
 // ─── Hermes session rows → usage events ─────────────────────────────────────

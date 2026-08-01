@@ -59,10 +59,18 @@ your device.
 Live-verified readers in this release: Claude Code CLI/Desktop, Codex
 CLI/Desktop, Cursor CLI/Desktop Agent, Grok Build, Hermes, opencode 1.17.18,
 and Cline CLI 3.0.39.
-GitHub Copilot CLI and Aider are fixture-tested but were not completed as live
-requests during release testing. Paid Anthropic/OpenAI API routes are
-experimental and test-covered but were not exercised against paid APIs or
-reconciled with provider invoices.
+OpenHuman, GitHub Copilot CLI, and Aider are fixture-tested but were not
+completed as live requests during release testing. Paid Anthropic/OpenAI API
+routes are experimental and test-covered but were not exercised against paid
+APIs or reconciled with provider invoices.
+
+OpenHuman usage is read from only the active workspace's append-only
+`state/costs.jsonl` ledger (`OPENHUMAN_WORKSPACE` is honored). Token buckets
+are exact; provider-charged costs remain reported and OpenHuman estimates stay
+visibly estimated. Tokimeter does not read Memory Trees, wiki pages, run
+journals, transcripts, OAuth state, or credentials, and does not retain the
+local account id used for workspace discovery. Bare managed model aliases stay
+attributed to `openhuman`. Scope the report with `--tool openhuman`.
 
 Claude Code and Codex coverage includes local coding sessions created from
 their CLI and desktop surfaces. Regular Claude or ChatGPT chats and
