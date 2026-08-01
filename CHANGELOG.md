@@ -5,6 +5,23 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+## 0.5.6 — 2026-08-02
+
+### Fixed
+
+- Make generated Tokimeter, `tm`, Codex, and Claude launchers follow the
+  currently active global Tokimeter installation instead of pinning the Node
+  version that was active during setup.
+- Detect legacy Node-version-pinned launchers in `tokimeter doctor` and show an
+  actionable repair message instead of a `MODULE_NOT_FOUND` stack trace when
+  an old Node installation has been removed.
+
+### Pricing
+
+- Add Anthropic's published Claude Opus 5 API price.
+- Recognize `codex-auto-review` as an internal, intentionally unpriced model
+  identifier rather than applying an unsupported public-model price.
+
 ## 0.5.5 — 2026-07-31
 
 ### Fixed
