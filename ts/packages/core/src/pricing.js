@@ -55,10 +55,11 @@ const PRICES = [
   { provider: "openai", model: "gpt-3.5-turbo",    input: 0.50,  output: 1.50,  cached: 0 },
 
   // ─── Anthropic ────────────────────────────────────────────────────────────
-  // Verified against Anthropic model reference, 2026-07-08.
+  // Verified against Anthropic pricing/model docs, 2026-07-30.
   // cached = cache-read rate (~0.1x input); cacheWrite = 5-minute-TTL cache-write rate (~1.25x input).
   { provider: "anthropic", model: "claude-fable-5",          input: 10.00, output: 50.00, cached: 1.00, cacheWrite: 12.50,
     aliases: ["claude-mythos-5"] },
+  { provider: "anthropic", model: "claude-opus-5",           input: 5.00,  output: 25.00, cached: 0.50, cacheWrite: 6.25 },
   { provider: "anthropic", model: "claude-opus-4-8",         input: 5.00,  output: 25.00, cached: 0.50, cacheWrite: 6.25,
     aliases: ["claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5", "claude-opus-4-5-20251101"] },
   // Sonnet 5 sticker price is $3/$15; introductory $2/$10 applies through 2026-08-31 — using intro
@@ -155,6 +156,20 @@ const CUSTOM_PRICING_FILE = process.env.TOKIMETER_PRICING_FILE || join(homedir()
 const PRICING_FEED_FILE = process.env.TOKIMETER_PRICING_FEED_FILE || join(homedir(), '.tokimeter', 'pricing-feed.json');
 const PRICING_FEED_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
 const FEED_PROVIDERS = { openai: 'openai', anthropic: 'anthropic', gemini: 'google', xai: 'xai', deepseek: 'deepseek', mistral: 'mistral' };
+const KNOWN_INTERNAL_UNPRICED = new Map([
+  ['codex-auto-review', {
+    provider: 'openai',
+    reason: 'OpenAI identifies this as Codex’s internal automatic approval reviewer but does not publish a stable per-token price or billable model mapping.',
+  }],
+]);
+
+function knownInternalUnpriced(model) {
+  const exact = KNOWN_INTERNAL_UNPRICED.get(model);
+  if (exact) return exact;
+  if (!model.includes('/')) return null;
+  return KNOWN_INTERNAL_UNPRICED.get(model.slice(model.lastIndexOf('/') + 1)) || null;
+}
+
 const CUSTOM_PRICES = loadCustomPrices();
 const FEED_PRICES = loadFeedPrices();
 // Precedence: custom overrides > verified built-in table > community feed.
@@ -222,6 +237,7 @@ export function priceCall(model, inputTokens = 0, outputTokens = 0, cachedTokens
   if (!price) {
     // Unknown models are deliberately unpriced in authoritative totals. Keep
     // the old $2/$8 heuristic only as an explicitly separate rough estimate.
+    const internal = knownInternalUnpriced(model);
     const inCost = ((inputTokens + cacheCreationTokens) / 1_000_000) * 2.0;
     const outCost = (outputTokens / 1_000_000) * 8.0;
     return {
@@ -230,7 +246,7 @@ export function priceCall(model, inputTokens = 0, outputTokens = 0, cachedTokens
       totalCost: 0,
       roughEstimateCost: round6(inCost + outCost),
       price: null,
-      pricingSource: 'fallback',
+      pricingSource: internal ? 'internal' : 'fallback',
       authoritative: false,
     };
   }
@@ -300,6 +316,18 @@ function lookupPrice(model) {
 export function getPricingSource(model) {
   const price = getPrice(model);
   if (!price) {
+    const internal = knownInternalUnpriced(model);
+    if (internal) {
+      return {
+        confidence: 'fallback',
+        source: 'internal',
+        authoritative: false,
+        file: CUSTOM_PRICING_FILE,
+        model,
+        provider: internal.provider,
+        reason: internal.reason,
+      };
+    }
     return {
       confidence: 'fallback',
       source: 'fallback',
