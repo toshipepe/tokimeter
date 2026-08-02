@@ -5,6 +5,19 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+## 0.5.8 — 2026-08-03
+
+### Fixed
+
+- Classify Codex vendor-reported rate-limit windows by their recorded duration
+  instead of assuming the primary slot is five hours and the secondary slot is
+  weekly.
+- Label a weekly-only primary window correctly, order reversed five-hour and
+  weekly slots consistently, and display unfamiliar durations literally
+  without inventing quota semantics.
+- Preserve the same duration classification when syncing supported Codex limit
+  snapshots to the optional hosted dashboard.
+
 ## 0.5.7 — 2026-08-02
 
 ### Added
