@@ -5,6 +5,26 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+## 0.5.7 — 2026-08-02
+
+### Added
+
+- Add `npx tokimeter install` as the single public command for installing the
+  stable global runtime, configuring supported local integrations, and
+  verifying setup.
+- Add `npx tokimeter install --dry-run` to preview the package and setup actions
+  without changing packages, files, processes, or settings.
+- Pin installation to the same package version already running through `npx`,
+  then invoke setup from npm's resolved global package directory instead of
+  relying on a newly refreshed shell `PATH`.
+
+### Safety
+
+- Keep installation explicit; the npm package still has no `install` or
+  `postinstall` lifecycle hook.
+- Stop before setup when the global package installation fails and provide a
+  direct recovery command when global resolution or setup cannot finish.
+
 ## 0.5.6 — 2026-08-02
 
 ### Fixed
