@@ -28,7 +28,7 @@ import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import http from 'node:http';
-import { readClaudeUsageEvents, readClaudeAgentActivity, readCodexTokenEvents, readAiderHistoryEvents, readGrokUsageEvents, readGrokSessionMeta, analyzeLogFileFormat, readCodexRateLimitSnapshots, buildHermesSessionQuery, hermesRowsToEvents, buildDelegationReport, buildAgentBreakdown, buildOrchestrationReport, buildBurnReport, buildBurnPlanner, buildSavingsReport, buildRoutingPolicy, formatRoutingPolicy, renderReportMarkdown, renderReportHtml, buildSessionTrace, buildMonthCard, renderMonthCardSvg, readOpencodeMessageFile, opencodeRowsToEvents, readClineTaskEvents, readClineSessionEvents, readCopilotOtelEvents, cursorStopPayloadToRecord, readCursorUsageEvents, parseCursorUsageCsv, recentCodexRolloutFiles as recentCodexRolloutFilesShared } from './parsers.js';
+import { readClaudeUsageEvents, readClaudeAgentActivity, readCodexTokenEvents, readAiderHistoryEvents, readGrokUsageEvents, readGrokSessionMeta, analyzeLogFileFormat, readCodexRateLimitSnapshots, classifyCodexRateLimitWindows, buildHermesSessionQuery, hermesRowsToEvents, buildDelegationReport, buildAgentBreakdown, buildOrchestrationReport, buildBurnReport, buildBurnPlanner, buildSavingsReport, buildRoutingPolicy, formatRoutingPolicy, renderReportMarkdown, renderReportHtml, buildSessionTrace, buildMonthCard, renderMonthCardSvg, readOpencodeMessageFile, opencodeRowsToEvents, readClineTaskEvents, readClineSessionEvents, readCopilotOtelEvents, cursorStopPayloadToRecord, readCursorUsageEvents, parseCursorUsageCsv, recentCodexRolloutFiles as recentCodexRolloutFilesShared } from './parsers.js';
 import {
   chunkCloudEvents,
   clearCloudPause,
@@ -5104,11 +5104,8 @@ async function runLimits(limitsArgs) {
       const asOf = new Date(t.vendor.timestamp);
       const asOfLabel = `${String(asOf.getHours()).padStart(2, '0')}:${String(asOf.getMinutes()).padStart(2, '0')}`;
       console.log(`    Vendor-reported${t.vendor.planType ? ` (${t.vendor.planType} plan)` : ''}, as of ${asOfLabel}:`);
-      if (t.vendor.primary) {
-        console.log(`      5h window:  ${vendorWindowLine(t.vendor.primary)}`);
-      }
-      if (t.vendor.secondary) {
-        console.log(`      Weekly:     ${vendorWindowLine(t.vendor.secondary)}`);
+      for (const { window, label } of classifyCodexRateLimitWindows(t.vendor)) {
+        console.log(`      ${`${label}:`.padEnd(12)}${vendorWindowLine(window)}`);
       }
     }
     if (!t.fiveHourWindow.budget) {

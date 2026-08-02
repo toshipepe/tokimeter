@@ -27,7 +27,7 @@ import { spawn } from 'node:child_process';
 
 const { CostTracker } = await importCore();
 const { getPricingSource, listModels, priceCall } = await importCorePricing();
-const { latestCodexVendorSnapshot } = await import('./parsers.js');
+const { classifyCodexRateLimitWindows, latestCodexVendorSnapshot } = await import('./parsers.js');
 const {
   clearCloudPause,
   cloudPauseActive,
@@ -853,8 +853,8 @@ function syncLimitSnapshots() {
   }
   if (!snap) return;
   const capturedAt = new Date(snap.timestamp).toISOString();
-  const send = (window, kind) => {
-    if (!window || window.resetsAtMs == null) return;
+  const send = ({ window, kind }) => {
+    if (!kind || window.resetsAtMs == null) return;
     postCloudPayload({
       contract_version: 1,
       tool: 'codex',
@@ -865,8 +865,7 @@ function syncLimitSnapshots() {
       captured_at: capturedAt,
     }, recordCloudResult, 'limits');
   };
-  send(snap.primary, '5h');
-  send(snap.secondary, 'weekly');
+  for (const classified of classifyCodexRateLimitWindows(snap)) send(classified);
 }
 
 function enqueueCloudPayload(payload) {
