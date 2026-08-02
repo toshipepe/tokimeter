@@ -5,7 +5,7 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
-## 0.5.8 — 2026-08-03
+## 0.5.8 — 2026-08-02
 
 ### Fixed
 
