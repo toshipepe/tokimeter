@@ -23,7 +23,7 @@
  */
 
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -713,16 +713,22 @@ async function setupTool(setupArgs) {
   if (auto) {
     installShims(allTargets);
     const ptyStatus = ensureNodePtySpawnHelperExecutable();
-    const rcFile = ensureShimPathInShellRc();
+    const pathResult = ensureShimPathInShellRc();
     console.log(`  ✓ Auto shims installed in ${SHIM_BIN_DIR}`);
-    if (rcFile) {
-      console.log(`  ✓ PATH configured in ${rcFile}`);
+    if (pathResult.state === 'configured') {
+      console.log(`  ✓ PATH configured in ${pathResult.file}`);
       console.log(`    Restart your terminal or run: export PATH="${SHIM_BIN_DIR}:$PATH"`);
+    } else if (pathResult.state === 'managed') {
+      console.log(`  ⚠️ PATH not written: ${pathResult.file} is managed by Nix/Home Manager. Shims are still installed.`);
+      printManualShimPathHelp();
+    } else if (pathResult.state === 'unwritable') {
+      console.log(`  ⚠️ PATH not written: could not update ${pathResult.file} (${pathResult.code}). Shims are still installed.`);
+      printManualShimPathHelp();
     } else {
-      console.log(`  ⚠️ Could not detect a shell rc file to update.`);
-      console.log(`    Add this manually: export PATH="${SHIM_BIN_DIR}:$PATH"`);
+      console.log(`  ⚠️ Could not detect a shell rc file to update. Shims are still installed.`);
+      printManualShimPathHelp();
     }
-    await runAutoSetupPostflight({ targets: allTargets, ptyStatus, rcFile, claudeStatus });
+    await runAutoSetupPostflight({ targets: allTargets, ptyStatus, claudeStatus });
   } else if (target !== 'cursor') {
     // Cursor needs no shim — the status line + hook route through cursor-agent itself.
     console.log(`  Tip: run "tokimeter setup ${target} --auto" to make normal ${allTargets.join('/')} commands route through Tokimeter.`);
@@ -848,7 +854,7 @@ function buildSetupPlan({ target, auto, claudeSpinner }) {
       : ['tokimeter', 'tm', ...(target === 'codex' || target === 'codex-api' || target === 'codex-chatgpt' ? ['codex'] : []), ...(target === 'claude' ? ['claude'] : [])];
     for (const command of shimTargets) add('write', join(SHIM_BIN_DIR, command), 'generated shell shim');
     const rcFile = detectShellRcFile();
-    if (rcFile) add('update if needed', rcFile, `append marked PATH block for ${SHIM_BIN_DIR}`);
+    if (rcFile) add('update if possible', rcFile, `append marked PATH block for ${SHIM_BIN_DIR}; skipped if unwritable or Nix-managed`);
     add('inspect/repair if needed', 'optional node-pty spawn helper', 'executable bit only; no download');
     add('start if needed', PROXY_URL, 'localhost process for post-setup verification');
   }
@@ -870,7 +876,7 @@ function printSetupPlan(actions, { dryRun = false } = {}) {
   console.log(`  Revert setup changes with: tokimeter uninstall\n`);
 }
 
-async function runAutoSetupPostflight({ targets, ptyStatus, rcFile, claudeStatus }) {
+async function runAutoSetupPostflight({ targets, ptyStatus, claudeStatus }) {
   console.log(`\n  Verifying Tokimeter setup...`);
   const proxyReady = await ensureProxyRunning(false, true);
   const cleanPath = stripShimDirFromPath(process.env.PATH || '');
@@ -892,12 +898,17 @@ async function runAutoSetupPostflight({ targets, ptyStatus, rcFile, claudeStatus
     printDoctorLine('Real claude', Boolean(realClaude), realClaude || 'not found outside Tokimeter shims');
     printDoctorLine('Claude status', claudeStatus?.ok === true || isClaudeStatuslineInstalled(), claudeStatus?.detail || claudeStatuslineStatus());
   }
-  printDoctorLine('PATH update', Boolean(rcFile || isShimPathActive()), isShimPathActive()
+  const pathState = shimPathState();
+  printDoctorLine('PATH update', pathState.state !== 'manual', pathState.state === 'active'
     ? `${SHIM_BIN_DIR} is active now`
-    : rcFile
-      ? `configured in ${rcFile}; restart terminal`
-      : `add ${SHIM_BIN_DIR} to PATH`);
+    : pathState.state === 'configured'
+      ? `configured in ${pathState.file}; restart terminal`
+      : `needs manual or declarative setup; add ${SHIM_BIN_DIR} to PATH`);
   console.log(`  ──────────────────────────────────────────────`);
+  if (pathState.state === 'manual') {
+    console.log(`\n  Tokimeter shims are installed but not on PATH yet.`);
+    printManualShimPathHelp();
+  }
   console.log(`\n  Daily use after restart:`);
   if (targets.includes('codex')) console.log(`    codex`);
   if (targets.includes('claude')) console.log(`    claude`);
@@ -1378,13 +1389,27 @@ function claudeStatuslineStatus() {
   return `not configured; run tokimeter setup claude --auto`;
 }
 
+// Best-effort: a shell rc file can be unwritable (NixOS/Home Manager links it
+// into the read-only Nix store, and some setups chmod it). PATH is a
+// convenience on top of shims that already exist, so never fail setup here —
+// report what happened and let the caller print the manual instruction.
 function ensureShimPathInShellRc() {
   const rcFile = detectShellRcFile();
-  if (!rcFile) return '';
+  if (!rcFile) return { state: 'undetected', file: '' };
 
-  const existing = existsSync(rcFile) ? readFileSync(rcFile, 'utf8') : '';
+  let existing = '';
+  if (existsSync(rcFile)) {
+    try {
+      existing = readFileSync(rcFile, 'utf8');
+    } catch (e) {
+      return { state: 'unwritable', file: rcFile, code: errorCode(e) };
+    }
+  }
   if (existing.includes(AUTO_PATH_START) || existing.includes(SHIM_BIN_DIR)) {
-    return rcFile;
+    return { state: 'configured', file: rcFile };
+  }
+  if (isNixManagedFile(rcFile)) {
+    return { state: 'managed', file: rcFile };
   }
 
   const block = `
@@ -1392,8 +1417,65 @@ ${AUTO_PATH_START}
 export PATH="${SHIM_BIN_DIR}:$PATH"
 ${AUTO_PATH_END}
 `;
-  appendFileSync(rcFile, block);
-  return rcFile;
+  try {
+    appendFileSync(rcFile, block);
+  } catch (e) {
+    return { state: 'unwritable', file: rcFile, code: errorCode(e) };
+  }
+  return { state: 'configured', file: rcFile };
+}
+
+function errorCode(e) {
+  return e?.code || e?.message || 'unknown error';
+}
+
+// A Home Manager-managed rc file is a symlink into the read-only Nix store.
+// Appending to it would either fail or corrupt generated configuration, so
+// Tokimeter leaves it alone and points at the declarative option instead.
+function isNixManagedFile(file) {
+  try {
+    if (!lstatSync(file).isSymbolicLink()) return false;
+  } catch {
+    return false;
+  }
+  const candidates = [];
+  try {
+    candidates.push(resolve(dirname(file), readlinkSync(file)));
+  } catch {}
+  try {
+    candidates.push(realpathSync(file));
+  } catch {}
+  return candidates.some(target => target === '/nix/store' || target.startsWith('/nix/store/'));
+}
+
+function shellRcHasShimPath(rcFile) {
+  if (!rcFile || !existsSync(rcFile)) return false;
+  try {
+    const contents = readFileSync(rcFile, 'utf8');
+    return contents.includes(AUTO_PATH_START) || contents.includes(SHIM_BIN_DIR);
+  } catch {
+    return false;
+  }
+}
+
+// Three distinct outcomes, so setup postflight and doctor can say the same
+// thing: active in this shell, written to a shell file, or still manual.
+function shimPathState() {
+  if (isShimPathActive()) return { state: 'active', file: '' };
+  const rcFile = detectShellRcFile();
+  if (shellRcHasShimPath(rcFile)) return { state: 'configured', file: rcFile };
+  return { state: 'manual', file: rcFile };
+}
+
+function printManualShimPathHelp() {
+  console.log(`    Activate it in this shell: export PATH="${SHIM_BIN_DIR}:$PATH"`);
+  console.log(`    Or add that line to your shell configuration.`);
+  console.log(`    Home Manager (declarative): home.sessionPath = [ "${shimBinDirHomeExpression()}" ];`);
+}
+
+function shimBinDirHomeExpression() {
+  const home = homedir();
+  return home && SHIM_BIN_DIR.startsWith(`${home}/`) ? `$HOME${SHIM_BIN_DIR.slice(home.length)}` : SHIM_BIN_DIR;
 }
 
 function detectShellRcFile() {
@@ -2678,9 +2760,12 @@ async function runDoctor() {
   printDoctorLine('Real codex', Boolean(commandPath('codex', cleanPath)), commandPath('codex', cleanPath) || 'not found outside Tokimeter shims');
   printDoctorLine('Real claude', Boolean(commandPath('claude', cleanPath)), commandPath('claude', cleanPath) || 'not found outside Tokimeter shims');
   printDoctorLine('Claude status', isClaudeStatuslineInstalled(), claudeStatuslineStatus());
-  printDoctorLine('Shim PATH active', isShimPathActive(), isShimPathActive()
+  const pathState = shimPathState();
+  printDoctorLine('Shim PATH active', pathState.state === 'active', pathState.state === 'active'
     ? `${SHIM_BIN_DIR} is on PATH`
-    : `add ${SHIM_BIN_DIR} to PATH or restart your terminal`);
+    : pathState.state === 'configured'
+      ? `configured in ${pathState.file}; restart your terminal`
+      : `needs manual or declarative setup; add ${SHIM_BIN_DIR} to PATH`);
   const cloudUrl = process.env.TOKIMETER_CLOUD_URL || getSetting('cloud.url');
   const cloudKey = process.env.TOKIMETER_API_KEY || getSetting('cloud.apiKey');
   const cloudState = readCloudSyncState();
@@ -2721,10 +2806,13 @@ async function runDoctor() {
   if (summary) {
     console.log(`  Spend summary       ${summary.todayCalls || 0} calls today / $${(summary.todayCost || 0).toFixed(4)}`);
   }
-  if (!isShimPathActive()) {
+  if (pathState.state !== 'active') {
     console.log('');
     console.log(`  Current terminal is not using Tokimeter shims yet.`);
     console.log(`  Run now: export PATH="${SHIM_BIN_DIR}:$PATH"`);
+    if (pathState.state === 'manual') {
+      console.log(`  Home Manager (declarative): home.sessionPath = [ "${shimBinDirHomeExpression()}" ];`);
+    }
     console.log(`  Then check: which codex`);
     console.log(`  Expected: ${join(SHIM_BIN_DIR, 'codex')}`);
   }
@@ -2760,7 +2848,8 @@ async function runReady() {
   const cleanPath = stripShimDirFromPath(process.env.PATH || '');
   const health = await fetchJSON(`${PROXY_URL}/api/health`);
   const proxyReady = health?.status === 'ok';
-  const pathActive = isShimPathActive();
+  const pathState = shimPathState();
+  const pathActive = pathState.state === 'active';
   const codexShim = isShimInstalled('codex');
   const claudeShim = isShimInstalled('claude');
   const realCodex = commandPath('codex', cleanPath);
@@ -2770,7 +2859,11 @@ async function runReady() {
 
   const checks = [
     ['Proxy', proxyReady, proxyReady ? `running at ${PROXY_URL}` : `not running yet`],
-    ['Shell PATH', pathActive, pathActive ? `${SHIM_BIN_DIR} active` : `restart terminal or export PATH="${SHIM_BIN_DIR}:$PATH"`],
+    ['Shell PATH', pathActive, pathActive
+      ? `${SHIM_BIN_DIR} active`
+      : pathState.state === 'configured'
+        ? `configured in ${pathState.file}; restart terminal`
+        : `needs manual or declarative setup; export PATH="${SHIM_BIN_DIR}:$PATH"`],
     ['Codex', codexShim && Boolean(realCodex), codexShim ? (realCodex ? `normal codex routes through Tokimeter` : `real codex not found outside shims`) : `run tokimeter setup codex --auto`],
     ['Claude', claudeShim && Boolean(realClaude), claudeShim ? (realClaude ? `normal claude routes through Tokimeter` : `real claude not found outside shims`) : `run tokimeter setup claude --auto`],
     ['Claude HUD', claudeStatus, claudeStatus ? `configured` : `run tokimeter setup claude --auto`],
@@ -2801,6 +2894,9 @@ async function runReady() {
   }
   if (!pathActive) {
     console.log(`  Then restart your terminal, or run now: export PATH="${SHIM_BIN_DIR}:$PATH"`);
+    if (pathState.state === 'manual') {
+      console.log(`  Home Manager (declarative): home.sessionPath = [ "${shimBinDirHomeExpression()}" ];`);
+    }
   }
   if (!proxyReady) {
     console.log(`  Proxy will auto-start during setup or normal CLI use.`);
@@ -3335,11 +3431,17 @@ function uninstallAutoSetup() {
   ];
   for (const rcFile of rcFiles) {
     if (!existsSync(rcFile)) continue;
-    const original = readFileSync(rcFile, 'utf8');
-    const next = removeMarkedPathBlock(original);
-    if (next !== original) {
-      writeFileSync(rcFile, next);
-      console.log(`  ✓ Removed Tokimeter PATH block from ${rcFile}`);
+    // Same best-effort rule as setup: an unwritable or Nix-managed rc file
+    // must not turn uninstall into a crash.
+    try {
+      const original = readFileSync(rcFile, 'utf8');
+      const next = removeMarkedPathBlock(original);
+      if (next !== original) {
+        writeFileSync(rcFile, next);
+        console.log(`  ✓ Removed Tokimeter PATH block from ${rcFile}`);
+      }
+    } catch (e) {
+      console.log(`  ⚠️ Could not update ${rcFile} (${errorCode(e)}); remove the Tokimeter PATH block manually if present.`);
     }
   }
 
