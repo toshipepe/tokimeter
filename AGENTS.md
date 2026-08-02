@@ -11,7 +11,7 @@ reachable Git commit as public.
 - Never add the private website or dashboard source, Supabase server functions
   or service credentials, billing implementation, Cloudflare configuration,
   contact-form recipient addresses, private launch plans, or operational
-  handoffs. Those belong only in the private `tokimeter-cloud` repository or in
+  handoffs. Those belong only in the private hosted-product repository or in
   ignored local working directories.
 - Never commit secrets, access tokens, environment files, private keys,
   credentials, personal email addresses, real customer data, prompt or response
@@ -47,8 +47,8 @@ reachable Git commit as public.
   archive/delete repositories, or deploy the hosted website without explicit
   user approval.
 - Never deploy directly to Cloudflare from this public repository. The website
-  is deployed from the private `tokimeter-cloud` repository through its
-  existing integration.
+  is deployed from the private hosted-product repository through its existing
+  integration.
 
 ## Required verification
 
