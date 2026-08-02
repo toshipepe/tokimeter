@@ -101,9 +101,7 @@ may still need its own global Tokimeter install. If a launcher created by an
 older Tokimeter release fails with `MODULE_NOT_FOUND`, repair it once with:
 
 ```bash
-npm install -g tokimeter
-"$(npm prefix -g)/bin/tokimeter" setup --auto
-hash -r
+npx tokimeter install
 ```
 
 ## Am I about to hit my limit?
