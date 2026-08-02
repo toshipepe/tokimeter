@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import http from 'node:http';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -85,6 +86,34 @@ process.exit(2);
     },
     logFile,
   };
+}
+
+// A stub health endpoint keeps `setup --auto` postflight from spawning a real
+// proxy, so these tests only exercise shim + shell-PATH behavior.
+async function stubProxy(t) {
+  const server = http.createServer((req, res) => {
+    if (req.url === '/health') {
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      res.end('ok');
+      return;
+    }
+    if (req.url === '/api/health') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', manualTracking: true, callMetadata: true }));
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  // Bind every loopback family: the CLI talks to `localhost`, which can
+  // resolve to ::1 before 127.0.0.1.
+  await new Promise((resolveListen) => server.listen(0, resolveListen));
+  server.unref();
+  t.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
+  return String(server.address().port);
 }
 
 test('setup --dry-run prints exact plan and performs no mutation', (t) => {
@@ -195,6 +224,68 @@ test('setup plan is shown before mutation and uninstall restores prior configs',
   assert.equal(existsSync(join(env.TOKIMETER_DATA_DIR, 'codex-profiles-prev.json')), false);
   assert.equal(existsSync(join(env.TOKIMETER_DATA_DIR, 'claude-statusline.mjs')), false);
   assert.equal(existsSync(join(env.TOKIMETER_DATA_DIR, 'claude-statusline-prev.json')), false);
+});
+
+test('setup --auto survives an unwritable shell rc file and keeps its shims', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'tokimeter-setup-ro-rc-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const rcFile = join(root, '.bashrc');
+  const rcContents = '# synthetic read-only shell configuration\n';
+  writeFileSync(rcFile, rcContents);
+  chmodSync(rcFile, 0o444);
+
+  const port = await stubProxy(t);
+  const result = spawnSync(process.execPath, [CLI, 'setup', '--auto'], {
+    encoding: 'utf8',
+    env: { ...isolatedEnv(root), SHELL: '/bin/bash', TOKIMETER_PORT: port },
+  });
+  const output = `${result.stdout}${result.stderr}`;
+  const shimDir = join(root, '.tokimeter', 'bin');
+
+  assert.equal(result.status, 0);
+  assert.match(output, /PATH not written: could not update/);
+  assert.ok(output.includes(rcFile));
+  assert.match(output, /\((EACCES|EPERM|EROFS)\)/);
+  assert.match(output, /Shims are still installed/);
+  assert.ok(output.includes(`export PATH="${shimDir}:$PATH"`));
+  assert.match(output, /needs manual or declarative setup/);
+  assert.equal(readFileSync(rcFile, 'utf8'), rcContents);
+  for (const command of ['tokimeter', 'tm', 'codex', 'claude']) {
+    assert.equal(existsSync(join(shimDir, command)), true);
+  }
+
+  const uninstall = spawnSync(process.execPath, [CLI, 'uninstall'], {
+    encoding: 'utf8',
+    env: { ...isolatedEnv(root), SHELL: '/bin/bash', TOKIMETER_PORT: port },
+  });
+  assert.equal(uninstall.status, 0);
+  assert.equal(readFileSync(rcFile, 'utf8'), rcContents);
+});
+
+test('setup --auto leaves a Nix-managed shell rc file untouched', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'tokimeter-setup-nix-rc-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const rcFile = join(root, '.bashrc');
+  const storeTarget = '/nix/store/00000000000000000000000000000000-home-manager-files/.bashrc';
+  symlinkSync(storeTarget, rcFile);
+
+  const port = await stubProxy(t);
+  const result = spawnSync(process.execPath, [CLI, 'setup', '--auto'], {
+    encoding: 'utf8',
+    env: { ...isolatedEnv(root), SHELL: '/bin/bash', TOKIMETER_PORT: port },
+  });
+  const output = `${result.stdout}${result.stderr}`;
+  const shimDir = join(root, '.tokimeter', 'bin');
+
+  assert.equal(result.status, 0);
+  assert.match(output, /managed by Nix\/Home Manager/);
+  assert.match(output, /home\.sessionPath = \[ "\$HOME\/\.tokimeter\/bin" \];/);
+  assert.ok(output.includes(`export PATH="${shimDir}:$PATH"`));
+  assert.equal(readlinkSync(rcFile), storeTarget);
+  assert.equal(existsSync(storeTarget), false);
+  for (const command of ['tokimeter', 'tm', 'codex', 'claude']) {
+    assert.equal(existsSync(join(shimDir, command)), true);
+  }
 });
 
 test('npm package has no install hooks and release workflow is stage-only', () => {

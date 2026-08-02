@@ -5,6 +5,23 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+### Fixed
+
+- Keep `setup --auto` from failing when the shell configuration file cannot be
+  written. NixOS and Home Manager users have a read-only `.bashrc` or `.zshrc`
+  linked into the Nix store, which previously crashed setup with `EACCES` after
+  the shims had already been created.
+- Leave a Nix/Home Manager-managed shell file untouched instead of appending to
+  it, and print the declarative `home.sessionPath` option alongside the manual
+  `export PATH` line.
+- Report the affected file and error code as a warning, and keep the created
+  shims, so setup still finishes successfully.
+- Distinguish three PATH states in setup verification, `doctor`, and `ready`:
+  active in the current shell, configured in a shell file, or needing manual or
+  declarative setup.
+- Stop `uninstall` from failing when a shell configuration file cannot be read
+  or written.
+
 ## 0.5.9 — 2026-08-03
 
 ### Changed
