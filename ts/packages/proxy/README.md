@@ -96,9 +96,7 @@ Node version. To migrate a launcher written by an older release after a
 `MODULE_NOT_FOUND` error:
 
 ```bash
-npm install -g tokimeter
-"$(npm prefix -g)/bin/tokimeter" setup --auto
-hash -r
+npx tokimeter install
 ```
 
 ## Limits: the 5-hour window
