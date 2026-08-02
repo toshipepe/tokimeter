@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -43,6 +43,50 @@ function tree(root) {
   return result.sort();
 }
 
+function fakeNpmEnv(root, { installStatus = 0, includeInstalledCli = true } = {}) {
+  const binDir = join(root, 'fake-bin');
+  const globalRoot = join(root, 'fake-global', 'lib', 'node_modules');
+  const logFile = join(root, 'install-commands.jsonl');
+  const npmPath = join(binDir, process.platform === 'win32' ? 'npm.cmd' : 'npm');
+  const fakeNpmScript = join(binDir, 'fake-npm.mjs');
+  const installedCli = join(globalRoot, 'tokimeter', 'src', 'cli.js');
+  mkdirSync(binDir, { recursive: true });
+
+  if (includeInstalledCli) {
+    mkdirSync(dirname(installedCli), { recursive: true });
+    writeFileSync(installedCli, `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs';
+appendFileSync(${JSON.stringify(logFile)}, JSON.stringify({ command: 'installed-cli', args: process.argv.slice(2) }) + '\\n');
+`);
+  }
+
+  const fakeNpm = `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs';
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(logFile)}, JSON.stringify({ command: 'npm', args }) + '\\n');
+if (args[0] === 'install') process.exit(${installStatus});
+if (args[0] === 'root' && args[1] === '--global') {
+  console.log(${JSON.stringify(globalRoot)});
+  process.exit(0);
+}
+process.exit(2);
+`;
+  writeFileSync(fakeNpmScript, fakeNpm, { mode: 0o755 });
+  if (process.platform === 'win32') {
+    writeFileSync(npmPath, `@"${process.execPath}" "${fakeNpmScript}" %*\r\n`);
+  } else {
+    writeFileSync(npmPath, fakeNpm, { mode: 0o755 });
+  }
+
+  return {
+    env: {
+      ...isolatedEnv(root),
+      PATH: `${binDir}${delimiter}${process.env.PATH || ''}`,
+    },
+    logFile,
+  };
+}
+
 test('setup --dry-run prints exact plan and performs no mutation', (t) => {
   const root = mkdtempSync(join(tmpdir(), 'tokimeter-setup-dry-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -59,6 +103,60 @@ test('setup --dry-run prints exact plan and performs no mutation', (t) => {
   assert.match(output, /No files, processes, or settings were changed/);
   assert.match(output, /tokimeter uninstall/);
   assert.deepEqual(tree(root), before);
+});
+
+test('install pins the running package version and delegates to stable global setup', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'tokimeter-install-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const { env, logFile } = fakeNpmEnv(root);
+  const pkg = JSON.parse(readFileSync(PACKAGE_JSON, 'utf8'));
+
+  const output = execFileSync(process.execPath, [CLI, 'install'], {
+    encoding: 'utf8',
+    env,
+  });
+  const commands = readFileSync(logFile, 'utf8').trim().split(/\r?\n/).map(line => JSON.parse(line));
+
+  assert.match(output, /Tokimeter Install/);
+  assert.match(output, /Tokimeter is installed/);
+  assert.deepEqual(commands, [
+    { command: 'npm', args: ['install', '--global', `tokimeter@${pkg.version}`] },
+    { command: 'npm', args: ['root', '--global'] },
+    { command: 'installed-cli', args: ['setup', '--auto'] },
+  ]);
+});
+
+test('install dry-run performs no package or setup command', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'tokimeter-install-dry-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const { env, logFile } = fakeNpmEnv(root, { includeInstalledCli: false });
+
+  const output = execFileSync(process.execPath, [CLI, 'install', '--dry-run'], {
+    encoding: 'utf8',
+    env,
+  });
+
+  assert.match(output, /Tokimeter Install Dry Run/);
+  assert.match(output, /No packages, files, processes, or settings were changed/);
+  assert.equal(existsSync(logFile), false);
+});
+
+test('install stops before setup when npm global install fails', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'tokimeter-install-fail-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const { env, logFile } = fakeNpmEnv(root, { installStatus: 42, includeInstalledCli: false });
+
+  const result = spawnSync(process.execPath, [CLI, 'install'], {
+    encoding: 'utf8',
+    env,
+  });
+  const commands = readFileSync(logFile, 'utf8').trim().split(/\r?\n/).map(line => JSON.parse(line));
+
+  assert.equal(result.status, 42);
+  assert.match(result.stderr, /could not install the stable runtime/);
+  assert.deepEqual(commands, [
+    { command: 'npm', args: ['install', '--global', `tokimeter@${JSON.parse(readFileSync(PACKAGE_JSON, 'utf8')).version}`] },
+  ]);
 });
 
 test('setup plan is shown before mutation and uninstall restores prior configs', (t) => {

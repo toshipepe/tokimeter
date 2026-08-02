@@ -22,7 +22,7 @@
  * Uses Node.js built-ins, with optional node-pty for interactive terminal overlays.
  */
 
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
@@ -206,6 +206,10 @@ if (args[0] === 'claude-import') {
   const importOptions = parseClaudeImportArgs(args.slice(1));
   await importClaudeTranscriptUsage({ verbose: !importOptions.quiet, ...importOptions });
   process.exit(0);
+}
+if (args[0] === 'install') {
+  installTokimeter(args.slice(1));
+  process.exit(process.exitCode || 0);
 }
 if (args[0] === 'setup') {
   await setupTool(args.slice(1));
@@ -724,6 +728,95 @@ async function setupTool(setupArgs) {
     console.log(`  Tip: run "tokimeter setup ${target} --auto" to make normal ${allTargets.join('/')} commands route through Tokimeter.`);
   }
   console.log(`  Revert these setup changes with: tokimeter uninstall`);
+}
+
+function installTokimeter(installArgs) {
+  const supportedArgs = new Set(['--dry-run']);
+  const unknown = installArgs.filter(arg => !supportedArgs.has(arg));
+  if (unknown.length > 0) {
+    console.error(`\n  ❌ Unknown install option: ${unknown[0]}`);
+    console.error(`     Use: npx tokimeter install [--dry-run]\n`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const dryRun = installArgs.includes('--dry-run');
+  const version = readProxyPackageVersion();
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
+    console.error(`\n  ❌ Tokimeter could not determine a valid package version.`);
+    console.error(`     Try again with: npx tokimeter@latest install\n`);
+    process.exitCode = 1;
+    return;
+  }
+  const packageSpec = `tokimeter@${version}`;
+
+  console.log(`\n  Tokimeter Install${dryRun ? ' Dry Run' : ''}`);
+  console.log(`  ──────────────────────────────────────────────`);
+  console.log(`  1. Install stable runtime: npm install --global ${packageSpec}`);
+  console.log(`  2. Configure local meter: tokimeter setup --auto`);
+  console.log(`  3. Verify setup and print any action needed`);
+  console.log(`  ──────────────────────────────────────────────`);
+
+  if (dryRun) {
+    console.log(`  No packages, files, processes, or settings were changed.\n`);
+    return;
+  }
+
+  console.log(`\n  Installing ${packageSpec}...\n`);
+  const npmInstall = spawnSync('npm', ['install', '--global', packageSpec], {
+    stdio: 'inherit',
+    env: process.env,
+    shell: process.platform === 'win32',
+  });
+  if (npmInstall.error || npmInstall.status !== 0) {
+    const detail = npmInstall.error?.message || `npm exited with status ${npmInstall.status}`;
+    console.error(`\n  ❌ Tokimeter could not install the stable runtime: ${detail}`);
+    console.error(`     Fix the npm error above, then run: npx tokimeter install\n`);
+    process.exitCode = npmInstall.status || 1;
+    return;
+  }
+
+  const npmRoot = spawnSync('npm', ['root', '--global'], {
+    encoding: 'utf8',
+    env: process.env,
+    shell: process.platform === 'win32',
+  });
+  if (npmRoot.error || npmRoot.status !== 0) {
+    const detail = npmRoot.error?.message || String(npmRoot.stderr || '').trim() || `npm exited with status ${npmRoot.status}`;
+    console.error(`\n  ❌ Tokimeter was installed, but npm's global package directory could not be resolved: ${detail}`);
+    console.error(`     Run: tokimeter setup --auto\n`);
+    process.exitCode = npmRoot.status || 1;
+    return;
+  }
+
+  const globalRoot = String(npmRoot.stdout || '')
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .at(-1) || '';
+  const installedCli = join(globalRoot, 'tokimeter', 'src', 'cli.js');
+  if (!globalRoot || !existsSync(installedCli)) {
+    console.error(`\n  ❌ Tokimeter was installed, but its CLI was not found in npm's global package directory.`);
+    console.error(`     Run: tokimeter setup --auto\n`);
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(`\n  Configuring the local meter...\n`);
+  const setup = spawnSync(process.execPath, [installedCli, 'setup', '--auto'], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+  if (setup.error || setup.status !== 0) {
+    const detail = setup.error?.message || `setup exited with status ${setup.status}`;
+    console.error(`\n  ❌ Tokimeter installed, but setup did not finish: ${detail}`);
+    console.error(`     Retry with: tokimeter setup --auto\n`);
+    process.exitCode = setup.status || 1;
+    return;
+  }
+
+  console.log(`\n  ✓ Tokimeter is installed. Restart the terminal if setup added Tokimeter to PATH.`);
+  console.log(`    Check anytime with: tokimeter doctor\n`);
 }
 
 function buildSetupPlan({ target, auto, claudeSpinner }) {
@@ -6234,7 +6327,9 @@ function printHelp() {
     tokimeter sync [--days=30]   Sync all supported tools now (metadata only)
     tokimeter login <url> <key>  Advanced: connect with an ingest URL + device key
     tokimeter logout             Disable sync and remove the stored device key
-    tokimeter setup --auto       One-command local install for Codex + Claude
+    tokimeter install            Install stable runtime + configure local meter
+    tokimeter install --dry-run  Show install/setup actions; change nothing
+    tokimeter setup --auto       Configure local meter for Codex + Claude
     tokimeter setup [tool]       Configure a specific local tool profile
     tokimeter setup --dry-run    Print exact setup files/actions; change nothing
     tokimeter setup cursor       Cursor CLI: Tokimeter status line + exact per-turn usage capture (hook)
@@ -6252,6 +6347,7 @@ function printHelp() {
     tokimeter aider [args]         Aider (OpenAI-provider models)
 
   Examples:
+    npx tokimeter install
     tokimeter claude "refactor auth.py"
     tokimeter codex "fix the bug in utils.js"
     tm codex-chatgpt exec --skip-git-repo-check "say hello"

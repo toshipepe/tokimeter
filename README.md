@@ -22,7 +22,7 @@ Runs one private report from the usage metadata already on your machine.
 Reports, budgets, limit warnings, live status-line HUDs, and more:
 
 ```bash
-npm install -g tokimeter && "$(npm prefix -g)/bin/tokimeter" setup --auto
+npx tokimeter install
 ```
 
 <p align="center">
@@ -76,11 +76,17 @@ configuration, or API keys are needed.
 
 ## Setup details
 
-Preview every file and process action first, with no mutation:
+`npx tokimeter install` installs the same Tokimeter version globally, runs the
+reviewable `setup --auto` flow, and verifies the result. It is an explicit CLI
+command, not an automatic npm lifecycle script. Preview it without changing
+anything:
 
 ```bash
-tokimeter setup --auto --dry-run
+npx tokimeter install --dry-run
 ```
+
+For an existing global installation, `tokimeter setup --auto --dry-run` still
+previews only the setup actions.
 
 Close and reopen your terminal when setup finishes. Then keep using `codex`,
 `claude`, and your other supported tools normally; Tokimeter keeps its local
