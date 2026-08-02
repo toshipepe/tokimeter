@@ -66,6 +66,43 @@ test('pricing provenance distinguishes verified, community, custom, and fallback
     { confidence: 'custom', source: 'custom' },
   );
   assert.equal(pricing.getPricingSource('future-unknown-model').confidence, 'fallback');
+  assert.deepEqual(
+    {
+      confidence: pricing.getPricingSource('codex-auto-review').confidence,
+      source: pricing.getPricingSource('codex-auto-review').source,
+      authoritative: pricing.getPricingSource('codex-auto-review').authoritative,
+    },
+    { confidence: 'fallback', source: 'internal', authoritative: false },
+  );
+});
+
+test('current recorded model prices are sourced without guessing internal aliases', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'tokimeter-current-models-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  process.env.TOKIMETER_PRICING_FILE = join(root, 'missing-custom.json');
+  process.env.TOKIMETER_PRICING_FEED_FILE = join(root, 'missing-feed.json');
+  t.after(() => {
+    delete process.env.TOKIMETER_PRICING_FILE;
+    delete process.env.TOKIMETER_PRICING_FEED_FILE;
+  });
+
+  const nonce = `${Date.now()}-${Math.random()}`;
+  const pricing = await import(`${pathToFileURL(PRICING).href}?test=${nonce}`);
+  const opus = pricing.priceCall('claude-opus-5', 1_000_000, 1_000_000, 500_000, 200_000, {
+    cachedIncludedInInput: false,
+  });
+
+  assert.equal(opus.inputCost, 6.5);
+  assert.equal(opus.outputCost, 25);
+  assert.equal(opus.totalCost, 31.5);
+  assert.equal(opus.pricingSource, 'verified');
+  assert.equal(pricing.getPricingSource('claude-opus-5').source, 'built-in');
+
+  const reviewer = pricing.priceCall('codex-auto-review', 1_000_000, 1_000_000);
+  assert.equal(reviewer.totalCost, 0);
+  assert.equal(reviewer.authoritative, false);
+  assert.equal(reviewer.pricingSource, 'internal');
+  assert.equal(pricing.getPricingSource('codex-auto-review').source, 'internal');
 });
 
 test('unknown fallback stays outside authoritative tracker totals', async (t) => {

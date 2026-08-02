@@ -81,17 +81,54 @@ export function chunkCloudEvents(events, size = 200) {
   return chunks;
 }
 
+export function newestFirstCloudEvents(events) {
+  return Array.from(events || []).sort(
+    (left, right) => (Number(right?.timestamp) || 0) - (Number(left?.timestamp) || 0),
+  );
+}
+
+export async function sendCloudBatchWithRetry(send, {
+  maxQuotaRetries = 0,
+  wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  onQuotaWait = null,
+} = {}) {
+  let quotaRetries = 0;
+  while (true) {
+    try {
+      return await send();
+    } catch (error) {
+      const rateLimited = error?.rateLimited === true || Number(error?.status) === 429;
+      if (!rateLimited || quotaRetries >= maxQuotaRetries) throw error;
+      quotaRetries += 1;
+      const requestedWait = Number(error?.retryAfterMs);
+      const waitMs = Math.max(
+        1000,
+        Math.min(120000, Number.isFinite(requestedWait) && requestedWait > 0 ? requestedWait : 61000),
+      );
+      if (typeof onQuotaWait === 'function') onQuotaWait(waitMs, quotaRetries);
+      await wait(waitMs);
+    }
+  }
+}
+
 export function cloudResponseResult(status, payload = {}) {
-  const code = String(payload?.code || (Number(status) === 401 ? 'device_key_invalid' : ''));
+  const numericStatus = Number(status) || 0;
+  const rateLimited = numericStatus === 429;
+  const code = String(payload?.code || (numericStatus === 401 ? 'device_key_invalid' : rateLimited ? 'ingest_rate_limited' : ''));
   const accessPaused = Number(status) === 402 && ['trial_expired', 'upgrade_required'].includes(code);
-  const terminalFailure = accessPaused || Number(status) === 401;
+  const terminalFailure = accessPaused || numericStatus === 401;
+  const retryAfterSeconds = Number(payload?.retry_after_seconds);
   return {
-    ok: Number(status) >= 200 && Number(status) < 300,
-    status: Number(status) || 0,
+    ok: numericStatus >= 200 && numericStatus < 300,
+    status: numericStatus,
     code,
     error: String(payload?.error || ''),
     accessPaused,
     terminalFailure,
+    rateLimited,
+    retryAfterMs: rateLimited
+      ? Math.max(1000, (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0 ? retryAfterSeconds : 61) * 1000)
+      : 0,
     dataExpiresAt: payload?.data_expires_at || null,
     cloudDataDeletedAt: payload?.cloud_data_deleted_at || null,
     upgradeUrl: payload?.upgrade_url || 'https://tokimeter.com/app/',

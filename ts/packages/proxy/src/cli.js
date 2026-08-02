@@ -22,7 +22,7 @@
  * Uses Node.js built-ins, with optional node-pty for interactive terminal overlays.
  */
 
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
@@ -36,6 +36,8 @@ import {
   cloudPauseState,
   cloudResponseResult,
   eventToCloudPayload,
+  newestFirstCloudEvents,
+  sendCloudBatchWithRetry,
 } from './cloud-sync.js';
 
 const {
@@ -204,6 +206,10 @@ if (args[0] === 'claude-import') {
   const importOptions = parseClaudeImportArgs(args.slice(1));
   await importClaudeTranscriptUsage({ verbose: !importOptions.quiet, ...importOptions });
   process.exit(0);
+}
+if (args[0] === 'install') {
+  installTokimeter(args.slice(1));
+  process.exit(process.exitCode || 0);
 }
 if (args[0] === 'setup') {
   await setupTool(args.slice(1));
@@ -724,6 +730,95 @@ async function setupTool(setupArgs) {
   console.log(`  Revert these setup changes with: tokimeter uninstall`);
 }
 
+function installTokimeter(installArgs) {
+  const supportedArgs = new Set(['--dry-run']);
+  const unknown = installArgs.filter(arg => !supportedArgs.has(arg));
+  if (unknown.length > 0) {
+    console.error(`\n  ❌ Unknown install option: ${unknown[0]}`);
+    console.error(`     Use: npx tokimeter install [--dry-run]\n`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const dryRun = installArgs.includes('--dry-run');
+  const version = readProxyPackageVersion();
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
+    console.error(`\n  ❌ Tokimeter could not determine a valid package version.`);
+    console.error(`     Try again with: npx tokimeter@latest install\n`);
+    process.exitCode = 1;
+    return;
+  }
+  const packageSpec = `tokimeter@${version}`;
+
+  console.log(`\n  Tokimeter Install${dryRun ? ' Dry Run' : ''}`);
+  console.log(`  ──────────────────────────────────────────────`);
+  console.log(`  1. Install stable runtime: npm install --global ${packageSpec}`);
+  console.log(`  2. Configure local meter: tokimeter setup --auto`);
+  console.log(`  3. Verify setup and print any action needed`);
+  console.log(`  ──────────────────────────────────────────────`);
+
+  if (dryRun) {
+    console.log(`  No packages, files, processes, or settings were changed.\n`);
+    return;
+  }
+
+  console.log(`\n  Installing ${packageSpec}...\n`);
+  const npmInstall = spawnSync('npm', ['install', '--global', packageSpec], {
+    stdio: 'inherit',
+    env: process.env,
+    shell: process.platform === 'win32',
+  });
+  if (npmInstall.error || npmInstall.status !== 0) {
+    const detail = npmInstall.error?.message || `npm exited with status ${npmInstall.status}`;
+    console.error(`\n  ❌ Tokimeter could not install the stable runtime: ${detail}`);
+    console.error(`     Fix the npm error above, then run: npx tokimeter install\n`);
+    process.exitCode = npmInstall.status || 1;
+    return;
+  }
+
+  const npmRoot = spawnSync('npm', ['root', '--global'], {
+    encoding: 'utf8',
+    env: process.env,
+    shell: process.platform === 'win32',
+  });
+  if (npmRoot.error || npmRoot.status !== 0) {
+    const detail = npmRoot.error?.message || String(npmRoot.stderr || '').trim() || `npm exited with status ${npmRoot.status}`;
+    console.error(`\n  ❌ Tokimeter was installed, but npm's global package directory could not be resolved: ${detail}`);
+    console.error(`     Run: tokimeter setup --auto\n`);
+    process.exitCode = npmRoot.status || 1;
+    return;
+  }
+
+  const globalRoot = String(npmRoot.stdout || '')
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .at(-1) || '';
+  const installedCli = join(globalRoot, 'tokimeter', 'src', 'cli.js');
+  if (!globalRoot || !existsSync(installedCli)) {
+    console.error(`\n  ❌ Tokimeter was installed, but its CLI was not found in npm's global package directory.`);
+    console.error(`     Run: tokimeter setup --auto\n`);
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(`\n  Configuring the local meter...\n`);
+  const setup = spawnSync(process.execPath, [installedCli, 'setup', '--auto'], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+  if (setup.error || setup.status !== 0) {
+    const detail = setup.error?.message || `setup exited with status ${setup.status}`;
+    console.error(`\n  ❌ Tokimeter installed, but setup did not finish: ${detail}`);
+    console.error(`     Retry with: tokimeter setup --auto\n`);
+    process.exitCode = setup.status || 1;
+    return;
+  }
+
+  console.log(`\n  ✓ Tokimeter is installed. Restart the terminal if setup added Tokimeter to PATH.`);
+  console.log(`    Check anytime with: tokimeter doctor\n`);
+}
+
 function buildSetupPlan({ target, auto, claudeSpinner }) {
   const actions = [];
   const add = (action, path, detail = '') => actions.push({ action, path, detail });
@@ -831,20 +926,79 @@ function installShims(targets) {
 
 function writeShim(commandName, toolName) {
   const shimPath = join(SHIM_BIN_DIR, commandName);
-  const script = `#!/bin/sh
-# Generated by Tokimeter. Remove with: rm "${shimPath}"
-TOKIMETER_SHIM_TOOL="${toolName}" exec node "${CLI_PATH}" "${toolName}" "$@"
-`;
+  const script = buildCliLauncherScript({ shimPath, toolName });
   writeFileSync(shimPath, script, { mode: 0o755 });
 }
 
 function writeCliShim(commandName) {
   const shimPath = join(SHIM_BIN_DIR, commandName);
-  const script = `#!/bin/sh
-# Generated by Tokimeter. Remove with: tokimeter uninstall
-exec node "${CLI_PATH}" "$@"
-`;
+  const script = buildCliLauncherScript({ shimPath });
   writeFileSync(shimPath, script, { mode: 0o755 });
+}
+
+function shellSingleQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+// Resolve the currently active npm installation on every launch. Older shims
+// executed CLI_PATH directly, which pins them to one nvm/fnm/asdf Node version
+// and breaks as soon as that version directory is removed. Keep the setup-time
+// path only as a checked final fallback for local-development/npx setups.
+function buildCliLauncherScript({ shimPath, toolName = '' }) {
+  const prefix = toolName ? `${shellSingleQuote(toolName)} ` : '';
+  return `#!/bin/sh
+# Generated by Tokimeter. Remove with: tokimeter uninstall
+TOKIMETER_SHIM_DIR=${shellSingleQuote(SHIM_BIN_DIR)}
+TOKIMETER_SETUP_CLI=${shellSingleQuote(CLI_PATH)}
+
+# Exclude Tokimeter's shim directory so command lookup cannot recurse back
+# into this launcher. Preserve the rest of PATH, including spaces.
+tokimeter_clean_path=''
+tokimeter_old_ifs=$IFS
+IFS=:
+set -f
+for tokimeter_path_dir in \${PATH-}; do
+  case "$tokimeter_path_dir" in
+    ''|"$TOKIMETER_SHIM_DIR"|"$TOKIMETER_SHIM_DIR/") continue ;;
+  esac
+  if [ -z "$tokimeter_clean_path" ]; then
+    tokimeter_clean_path=$tokimeter_path_dir
+  else
+    tokimeter_clean_path="$tokimeter_clean_path:$tokimeter_path_dir"
+  fi
+done
+IFS=$tokimeter_old_ifs
+
+# Prefer the current package-manager bin. This automatically follows npm when
+# a Node version manager switches global prefixes or Tokimeter is upgraded.
+tokimeter_real=$(PATH="$tokimeter_clean_path" command -v tokimeter 2>/dev/null || :)
+if [ -n "$tokimeter_real" ] && [ "$tokimeter_real" != ${shellSingleQuote(shimPath)} ]; then
+  PATH="$tokimeter_clean_path" exec "$tokimeter_real" ${prefix}"$@"
+fi
+
+# npm's bin directory is not always on PATH, so resolve its current global
+# package root as a second dynamic route.
+tokimeter_npm=$(PATH="$tokimeter_clean_path" command -v npm 2>/dev/null || :)
+if [ -n "$tokimeter_npm" ]; then
+  tokimeter_npm_root=$(PATH="$tokimeter_clean_path" "$tokimeter_npm" root -g 2>/dev/null || :)
+  tokimeter_npm_cli="$tokimeter_npm_root/tokimeter/src/cli.js"
+  if [ -n "$tokimeter_npm_root" ] && [ -f "$tokimeter_npm_cli" ]; then
+    PATH="$tokimeter_clean_path" exec node "$tokimeter_npm_cli" ${prefix}"$@"
+  fi
+fi
+
+# Supports an unevicted npx cache or a source checkout, but never asks Node to
+# execute a path that no longer exists (the old MODULE_NOT_FOUND failure).
+if [ -f "$TOKIMETER_SETUP_CLI" ]; then
+  PATH="$tokimeter_clean_path" exec node "$TOKIMETER_SETUP_CLI" ${prefix}"$@"
+fi
+
+echo "Tokimeter launcher could not find the active Tokimeter installation." >&2
+echo "A Node version was probably switched or removed." >&2
+echo "Repair with: npm install -g tokimeter" >&2
+echo 'Then run: "$(npm prefix -g)/bin/tokimeter" setup --auto' >&2
+exit 127
+`;
 }
 
 function ensureClaudeStatusline({ spinner = false } = {}) {
@@ -2704,8 +2858,13 @@ async function runPricingCommand(pricingArgs) {
     }
     const source = getPricingSource(model);
     if (source.confidence === 'fallback') {
-      console.log(`  ${model}: unpriced. A rough $2/$8-per-1M fallback is shown separately and excluded from priced totals.`);
-      console.log(`  Add custom pricing to include this model in priced totals.`);
+      if (source.source === 'internal') {
+        console.log(`  ${model}: known internal model identifier, but no stable public per-token price or billable model mapping is available.`);
+        console.log(`  It remains unpriced and excluded from priced totals; no public model alias is guessed.`);
+      } else {
+        console.log(`  ${model}: unpriced. A rough $2/$8-per-1M fallback is shown separately and excluded from priced totals.`);
+        console.log(`  Add custom pricing to include this model in priced totals.`);
+      }
     } else {
       console.log(`  ${model}: ${source.confidence} pricing via ${source.source}${source.model ? ` (${source.model})` : ''}`);
     }
@@ -2823,15 +2982,25 @@ async function runCloudSync(syncArgs = [], { afterConnect = false } = {}) {
       : 2 * 86400 * 1000;
   const projectMode = cloudProjectMode(syncArgs);
   const events = collectLocalUsageEvents({ maxAgeMs });
-  const payloads = events.map((event) => eventToCloudPayload(event, { projectMode }));
+  // Replays prioritize current activity. If a large backfill is interrupted,
+  // the dashboard still catches up from newest to oldest on the next scan.
+  const payloads = newestFirstCloudEvents(events)
+    .map((event) => eventToCloudPayload(event, { projectMode }));
   const batches = chunkCloudEvents(payloads, 200);
   let sent = 0;
   try {
     for (const batch of batches) {
-      const result = await fetchCloudJson(cloudEventsUrl(cloudUrl), {
+      const result = await sendCloudBatchWithRetry(() => fetchCloudJson(cloudEventsUrl(cloudUrl), {
         apiKey: cloudKey,
         body: { contract_version: 1, events: batch },
         timeoutMs: 30000,
+      }), {
+        // Interactive sync/connect can finish a large backfill across quota
+        // windows. Background scans return promptly and resume newest-first.
+        maxQuotaRetries: quiet ? 0 : 10,
+        onQuotaWait: quiet ? null : (waitMs) => {
+          console.log(`  Cloud ingest is catching up; resuming in ${Math.ceil(waitMs / 1000)}s…`);
+        },
       });
       sent += Number(result.accepted ?? batch.length);
     }
@@ -2899,7 +3068,10 @@ async function runConnect(connectArgs) {
   console.log(`  ✓ Connected${result.device?.name ? ` as ${result.device.name}` : ''}`);
   console.log('    Only usage metadata syncs. Prompts, responses, code, account identity, and full paths are excluded.');
 
-  await runCloudSync(['--days=30'], { afterConnect: true });
+  // A reconnect continues from the last successful local cursor. A genuinely
+  // new installation still receives the documented 30-day first backfill.
+  const priorSync = readCloudSyncState();
+  await runCloudSync(Number(priorSync.lastSuccessAt) > 0 ? [] : ['--days=30'], { afterConnect: true });
   if (!connectArgs.includes('--no-restart')) {
     await stopProxy();
     await sleep(300);
@@ -3092,12 +3264,22 @@ function printDoctorLine(label, ok, detail) {
 }
 
 function isShimInstalled(command) {
-  return existsSync(join(SHIM_BIN_DIR, command));
+  const shimPath = join(SHIM_BIN_DIR, command);
+  if (!existsSync(shimPath)) return false;
+  try {
+    const script = readFileSync(shimPath, 'utf8');
+    return script.includes('tokimeter_clean_path=') && script.includes('command -v tokimeter');
+  } catch {
+    return false;
+  }
 }
 
 function shimStatus(command) {
   const shimPath = join(SHIM_BIN_DIR, command);
   if (!existsSync(shimPath)) return `not installed; run tokimeter setup --auto`;
+  if (!isShimInstalled(command)) {
+    return `legacy Node-version-pinned launcher; run "$(npm prefix -g)/bin/tokimeter" setup --auto`;
+  }
   return shimPath;
 }
 
@@ -5287,6 +5469,7 @@ function normalizePricingConfidence(value) {
   if (value === 'feed' || value === 'community') return 'community feed';
   if (value === 'custom') return 'custom local';
   if (value === 'reported') return 'provider/tool reported';
+  if (value === 'internal') return 'internal / unpriced';
   return 'fallback / unpriced';
 }
 
@@ -6141,7 +6324,9 @@ function printHelp() {
     tokimeter sync [--days=30]   Sync all supported tools now (metadata only)
     tokimeter login <url> <key>  Advanced: connect with an ingest URL + device key
     tokimeter logout             Disable sync and remove the stored device key
-    tokimeter setup --auto       One-command local install for Codex + Claude
+    tokimeter install            Install stable runtime + configure local meter
+    tokimeter install --dry-run  Show install/setup actions; change nothing
+    tokimeter setup --auto       Configure local meter for Codex + Claude
     tokimeter setup [tool]       Configure a specific local tool profile
     tokimeter setup --dry-run    Print exact setup files/actions; change nothing
     tokimeter setup cursor       Cursor CLI: Tokimeter status line + exact per-turn usage capture (hook)
@@ -6159,6 +6344,7 @@ function printHelp() {
     tokimeter aider [args]         Aider (OpenAI-provider models)
 
   Examples:
+    npx tokimeter install
     tokimeter claude "refactor auth.py"
     tokimeter codex "fix the bug in utils.js"
     tm codex-chatgpt exec --skip-git-repo-check "say hello"

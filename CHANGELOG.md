@@ -5,6 +5,54 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+## 0.5.7 — 2026-08-02
+
+### Added
+
+- Add `npx tokimeter install` as the single public command for installing the
+  stable global runtime, configuring supported local integrations, and
+  verifying setup.
+- Add `npx tokimeter install --dry-run` to preview the package and setup actions
+  without changing packages, files, processes, or settings.
+- Pin installation to the same package version already running through `npx`,
+  then invoke setup from npm's resolved global package directory instead of
+  relying on a newly refreshed shell `PATH`.
+
+### Safety
+
+- Keep installation explicit; the npm package still has no `install` or
+  `postinstall` lifecycle hook.
+- Stop before setup when the global package installation fails and provide a
+  direct recovery command when global resolution or setup cannot finish.
+
+## 0.5.6 — 2026-08-02
+
+### Fixed
+
+- Make generated Tokimeter, `tm`, Codex, and Claude launchers follow the
+  currently active global Tokimeter installation instead of pinning the Node
+  version that was active during setup.
+- Detect legacy Node-version-pinned launchers in `tokimeter doctor` and show an
+  actionable repair message instead of a `MODULE_NOT_FOUND` stack trace when
+  an old Node installation has been removed.
+
+### Pricing
+
+- Add Anthropic's published Claude Opus 5 API price.
+- Recognize `codex-auto-review` as an internal, intentionally unpriced model
+  identifier rather than applying an unsupported public-model price.
+
+## 0.5.5 — 2026-07-31
+
+### Fixed
+
+- Resume a reconnected hosted dashboard from the last successful local sync
+  instead of restarting the complete first-connection backfill.
+- Send recent metadata first during a large manual replay so the dashboard
+  catches up with current activity before older history.
+- Honor the hosted ingest retry delay during an interactive sync and resume the
+  same batch automatically across bounded quota windows.
+
 ## 0.5.4 — 2026-07-28
 
 ### Trust and pricing
