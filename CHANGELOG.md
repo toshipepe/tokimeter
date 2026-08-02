@@ -5,6 +5,13 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+## 0.5.9 — 2026-08-03
+
+### Changed
+
+- Point the npm package homepage to `https://tokimeter.com` while keeping the
+  source repository and issue tracker linked to GitHub.
+
 ## 0.5.8 — 2026-08-02
 
 ### Fixed
