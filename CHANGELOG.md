@@ -5,6 +5,8 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+## 0.5.10 — 2026-08-03
+
 ### Fixed
 
 - Keep `setup --auto` from failing when the shell configuration file cannot be
