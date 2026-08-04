@@ -43,28 +43,44 @@
       "source": null,
       "url": null,
       "verified": null,
-      "note": "No source or verification date is recorded in the built-in table."
+      "disputed": {
+        "checked": "2026-08-04",
+        "against": "https://ai.google.dev/gemini-api/docs/pricing",
+        "summary": "Built-in rates disagree with currently published pricing. gemini-2.5-flash is listed at $0.075 / $0.30 against a published $0.30 / $2.50, and gemini-3-flash at $0.15 / $0.60 against a published $1.50 / $9.00. gemini-2.5-pro input and output match the published short-context tier, but its cache-read rate does not. gemini-1.5-pro and gemini-1.5-flash no longer appear on the pricing page. Gemini also tiers rates above 200k context, which the built-in table does not model."
+      }
     },
     "mistral": {
       "label": "Mistral",
       "source": null,
       "url": null,
       "verified": null,
-      "note": "No source or verification date is recorded in the built-in table."
+      "disputed": {
+        "checked": "2026-08-04",
+        "against": "https://mistral.ai/pricing/api/",
+        "summary": "The built-in table prices the floating `-latest` aliases at rates from an older model generation. Published pricing lists Mistral Large 3 at $0.50 / $1.50 against a built-in $2.00 / $6.00, and Mistral Medium 3.5 at $1.50 / $7.50 against a built-in $0.40 / $4.00. Mistral now publishes a cache-read rate at a 90 percent discount, which the built-in table records as 0. `codestral` no longer appears on the pricing page."
+      }
     },
     "meta": {
       "label": "Meta",
       "source": null,
       "url": null,
       "verified": null,
-      "note": "No source or verification date is recorded in the built-in table."
+      "disputed": {
+        "checked": "2026-08-04",
+        "against": null,
+        "summary": "Meta publishes no generally available first-party API pricing; its direct Llama API remains waitlisted. Llama rates come from third-party hosts such as DeepInfra, Groq, and Together, differ between them, and move over time, so no single authoritative rate exists to cite. The built-in numbers cannot be sourced as published Meta pricing."
+      }
     },
     "deepseek": {
       "label": "DeepSeek",
       "source": null,
       "url": null,
       "verified": null,
-      "note": "No source or verification date is recorded in the built-in table."
+      "disputed": {
+        "checked": "2026-08-04",
+        "against": "https://api-docs.deepseek.com/quick_start/pricing",
+        "summary": "None of the built-in DeepSeek models appear on the current pricing page, which lists deepseek-v4-flash and deepseek-v4-pro. DeepSeek has also announced peak-hour pricing at 2x standard rates, with an effective date still pending, which the built-in table does not model."
+      }
     }
   },
   "scheduledChanges": [

@@ -10,7 +10,9 @@ it marks `~$` precisely because it is not a bill. See
 [the pricing methodology](PRICING.md) for how that distinction is enforced.
 
 66 models across 9 providers.
-5 providers have a recorded source; 4 do not and are marked below.
+5 providers are sourced and verified.
+
+> **4 providers below carry disputed rates.** Google, Mistral, Meta, DeepSeek were checked against their published pricing and did not match. Their sections say so, and their numbers should not be relied on until they are corrected. They are listed here rather than quietly omitted because hiding them would be the dishonest option.
 
 ## OpenAI
 
@@ -109,7 +111,11 @@ Composer 2.5 standard tier. The fast tier is priced under xAI.
 **Source:** _not recorded_  
 **Verified:** _not recorded_
 
-No source or verification date is recorded in the built-in table.
+> **These rates are disputed.** Checked 2026-08-04 against [published pricing](https://ai.google.dev/gemini-api/docs/pricing).
+>
+> Built-in rates disagree with currently published pricing. gemini-2.5-flash is listed at $0.075 / $0.30 against a published $0.30 / $2.50, and gemini-3-flash at $0.15 / $0.60 against a published $1.50 / $9.00. gemini-2.5-pro input and output match the published short-context tier, but its cache-read rate does not. gemini-1.5-pro and gemini-1.5-flash no longer appear on the pricing page. Gemini also tiers rates above 200k context, which the built-in table does not model.
+>
+> Treat the rates below as unreliable until they are corrected.
 
 | Model | Input | Cache read | Cache write | Output |
 |---|---|---|---|---|
@@ -126,7 +132,11 @@ No source or verification date is recorded in the built-in table.
 **Source:** _not recorded_  
 **Verified:** _not recorded_
 
-No source or verification date is recorded in the built-in table.
+> **These rates are disputed.** Checked 2026-08-04 against [published pricing](https://mistral.ai/pricing/api/).
+>
+> The built-in table prices the floating `-latest` aliases at rates from an older model generation. Published pricing lists Mistral Large 3 at $0.50 / $1.50 against a built-in $2.00 / $6.00, and Mistral Medium 3.5 at $1.50 / $7.50 against a built-in $0.40 / $4.00. Mistral now publishes a cache-read rate at a 90 percent discount, which the built-in table records as 0. `codestral` no longer appears on the pricing page.
+>
+> Treat the rates below as unreliable until they are corrected.
 
 | Model | Input | Cache read | Cache write | Output |
 |---|---|---|---|---|
@@ -140,7 +150,11 @@ No source or verification date is recorded in the built-in table.
 **Source:** _not recorded_  
 **Verified:** _not recorded_
 
-No source or verification date is recorded in the built-in table.
+> **These rates are disputed.** Checked 2026-08-04 against published pricing.
+>
+> Meta publishes no generally available first-party API pricing; its direct Llama API remains waitlisted. Llama rates come from third-party hosts such as DeepInfra, Groq, and Together, differ between them, and move over time, so no single authoritative rate exists to cite. The built-in numbers cannot be sourced as published Meta pricing.
+>
+> Treat the rates below as unreliable until they are corrected.
 
 | Model | Input | Cache read | Cache write | Output |
 |---|---|---|---|---|
@@ -156,7 +170,11 @@ No source or verification date is recorded in the built-in table.
 **Source:** _not recorded_  
 **Verified:** _not recorded_
 
-No source or verification date is recorded in the built-in table.
+> **These rates are disputed.** Checked 2026-08-04 against [published pricing](https://api-docs.deepseek.com/quick_start/pricing).
+>
+> None of the built-in DeepSeek models appear on the current pricing page, which lists deepseek-v4-flash and deepseek-v4-pro. DeepSeek has also announced peak-hour pricing at 2x standard rates, with an effective date still pending, which the built-in table does not model.
+>
+> Treat the rates below as unreliable until they are corrected.
 
 | Model | Input | Cache read | Cache write | Output |
 |---|---|---|---|---|
