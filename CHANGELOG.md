@@ -5,6 +5,17 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+## 0.5.11 — 2026-08-04
+
+### Added
+
+- Read OpenHuman usage from the active workspace's `state/costs.jsonl` ledger,
+  with no setup. Token buckets are exact, provider-charged cost stays reported
+  and OpenHuman's own estimates stay marked as estimates, and bare managed
+  aliases stay attributed to `openhuman` rather than guessing a provider.
+  Memory trees, wiki pages, run journals, transcripts, OAuth state, and the
+  local account id are never read. Fixture tested, not yet live verified.
+
 ### Pricing
 
 - Correct Google, Mistral, and DeepSeek rates against each provider's published
@@ -21,6 +32,15 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
   that cannot be sourced. Set a custom price for the host you actually use.
 - Drop downgrade suggestions that pointed at models which are no longer priced,
   so a savings figure can never be computed against an unpriced target.
+- Correct four more OpenAI rates found by re-verifying every remaining provider
+  on 2026-08-04: `o3` was `$10/$40` against a published `$2/$8`, `gpt-5.6-luna`
+  was `$1/$6` against `$0.20/$1.20`, `gpt-5.6-terra` was `$2.50/$15` against
+  `$2/$12`, and `o4-mini`'s cache-read rate was double the published figure.
+- Record xAI's published cache-read rates for `grok-4.5`, `grok-4.3`, and
+  `grok-build`, which were previously stored as unpriced.
+- Re-verify Anthropic and Z.AI's `glm-5.2` with no rate changes.
+- Mark Cursor's Composer 2.5 rate as no longer verifiable. Cursor stopped
+  publishing per-token rates for its own models.
 - Publish every rate with its source and verification date in `docs/PRICES.md`,
   generated from the same table the CLI prices with, and fail CI when a
   provider's verification goes stale or a dated rate change comes due.
