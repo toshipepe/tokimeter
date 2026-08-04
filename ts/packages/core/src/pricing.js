@@ -29,12 +29,12 @@ import { dirname, join } from 'node:path';
 /** @type {ModelPrice[]} */
 const PRICES = [
   // ─── OpenAI ───────────────────────────────────────────────────────────────
-  // GPT-5.x (verified against developers.openai.com/api/docs/pricing, 2026-07-08;
-  // GPT-5.6 Sol/Terra/Luna tiers verified 2026-07-11 — short-context standard rates;
-  // 5.6+ publishes explicit cache-write pricing at 1.25x input)
+  // Verified against developers.openai.com/api/docs/pricing, 2026-08-04.
+  // 5.6+ publishes explicit cache-write pricing at 1.25x input. o1-mini is no
+  // longer listed and is kept at its last published rate for older usage.
   { provider: "openai", model: "gpt-5.6-sol",       input: 5.00,  output: 30.00, cached: 0.50,  cacheWrite: 6.25 },
-  { provider: "openai", model: "gpt-5.6-terra",     input: 2.50,  output: 15.00, cached: 0.25,  cacheWrite: 3.125 },
-  { provider: "openai", model: "gpt-5.6-luna",      input: 1.00,  output: 6.00,  cached: 0.10,  cacheWrite: 1.25 },
+  { provider: "openai", model: "gpt-5.6-terra",     input: 2.00,  output: 12.00, cached: 0.20,  cacheWrite: 2.50 },
+  { provider: "openai", model: "gpt-5.6-luna",      input: 0.20,  output: 1.20,  cached: 0.02,  cacheWrite: 0.25 },
   { provider: "openai", model: "gpt-5.5",           input: 5.00,  output: 30.00, cached: 0.50 },
   { provider: "openai", model: "gpt-5.4",           input: 2.50,  output: 15.00, cached: 0.25 },
   { provider: "openai", model: "gpt-5.4-mini",      input: 0.75,  output: 4.50,  cached: 0.075 },
@@ -48,14 +48,14 @@ const PRICES = [
   { provider: "openai", model: "gpt-4.1-nano",      input: 0.10,  output: 0.40,  cached: 0.025 },
   { provider: "openai", model: "o1",               input: 15.00, output: 60.00, cached: 7.50 },
   { provider: "openai", model: "o1-mini",          input: 1.10,  output: 4.40,  cached: 0.55 },
-  { provider: "openai", model: "o3",               input: 10.00, output: 40.00, cached: 5.00 },
+  { provider: "openai", model: "o3",               input: 2.00,  output: 8.00,  cached: 0.50 },
   { provider: "openai", model: "o3-mini",          input: 1.10,  output: 4.40,  cached: 0.55 },
-  { provider: "openai", model: "o4-mini",          input: 1.10,  output: 4.40,  cached: 0.55 },
+  { provider: "openai", model: "o4-mini",          input: 1.10,  output: 4.40,  cached: 0.275 },
   { provider: "openai", model: "gpt-4-turbo",      input: 10.00, output: 30.00, cached: 0 },
   { provider: "openai", model: "gpt-3.5-turbo",    input: 0.50,  output: 1.50,  cached: 0 },
 
   // ─── Anthropic ────────────────────────────────────────────────────────────
-  // Verified against Anthropic pricing/model docs, 2026-07-30.
+  // Verified against platform.claude.com pricing, 2026-08-04.
   // cached = cache-read rate (~0.1x input); cacheWrite = 5-minute-TTL cache-write rate (~1.25x input).
   { provider: "anthropic", model: "claude-fable-5",          input: 10.00, output: 50.00, cached: 1.00, cacheWrite: 12.50,
     aliases: ["claude-mythos-5"] },
@@ -122,17 +122,21 @@ const PRICES = [
   //   tokimeter pricing set llama-4-maverick --input <in> --output <out>
 
   // ─── xAI Grok ─────────────────────────────────────────────────────────────
-  // grok-build: docs.x.ai Code API pricing (verified 2026-07-08); the Grok
+  // Verified against docs.x.ai models pricing, 2026-08-04, at the <200k tier.
+  // xAI publishes explicit cache-read rates; they were previously recorded as
+  // unpriced. Models below grok-4.3 are no longer listed and keep their last
+  // published rates for older tracked usage.
+  // grok-build: docs.x.ai Code API pricing; the Grok
   // Build CLI reports the model as grok-build / grok-build-b, API id is
   // grok-build-0.1. No cached-input price published → cached tokens free.
-  { provider: "xai", model: "grok-build",        input: 1.00, output: 2.00,  cached: 0,
+  { provider: "xai", model: "grok-build",        input: 1.00, output: 2.00,  cached: 0.20,
     aliases: ["grok-build-0.1", "grok-build-b"] },
   // grok-4.5: docs.x.ai flagship (verified 2026-07-11); $2/$6, 500k context,
   // no cached-input price published → cached tokens free.
-  { provider: "xai", model: "grok-4.5",          input: 2.00, output: 6.00,  cached: 0,
+  { provider: "xai", model: "grok-4.5",          input: 2.00, output: 6.00,  cached: 0.30,
     aliases: ["grok-4.5-latest"] },
   // grok-4.3: docs.x.ai Chat API pricing (verified 2026-07-08).
-  { provider: "xai", model: "grok-4.3",          input: 1.25, output: 2.50,  cached: 0 },
+  { provider: "xai", model: "grok-4.3",          input: 1.25, output: 2.50,  cached: 0.20 },
   // Composer 2.5 fast variant runs inside Grok Build as
   // grok-composer-2.5-fast; $3/$15 per cursor.com/blog/composer-2-5
   // (verified 2026-07-08). No cached price published for the fast tier.

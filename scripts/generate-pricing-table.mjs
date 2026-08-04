@@ -204,7 +204,7 @@ function runChecks() {
       continue;
     }
     const expected = change.expectedAfter || {};
-    for (const field of ['input', 'output']) {
+    for (const field of ['input', 'output', 'cached', 'cacheWrite']) {
       if (typeof expected[field] === 'number' && price[field] !== expected[field]) {
         failures.push(`${change.model} ${field} is still ${price[field]} after ${change.effective}; expected ${expected[field]} (${change.note})`);
       }

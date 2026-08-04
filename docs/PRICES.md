@@ -10,20 +10,22 @@ it marks `~$` precisely because it is not a bill. See
 [the pricing methodology](PRICING.md) for how that distinction is enforced.
 
 62 models across 8 priced providers.
-8 of 8 are sourced and verified.
+7 of 8 are sourced and verified.
+
+> **1 providers below carry disputed rates.** Cursor were checked against their published pricing and did not match. Their sections say so, and their numbers should not be relied on until they are corrected. They are listed here rather than quietly omitted because hiding them would be the dishonest option.
 
 ## OpenAI
 
 **Source:** [developers.openai.com/api/docs/pricing](https://developers.openai.com/api/docs/pricing)  
-**Verified:** 2026-07-08
+**Verified:** 2026-08-04
 
-GPT-5.6 Sol/Terra/Luna tiers verified 2026-07-11 at short-context standard rates.
+Standard (non-batch) text rates. o1-mini and gpt-4-turbo are no longer listed and keep their last published rates for older tracked usage.
 
 | Model | Input | Cache read | Cache write | Output |
 |---|---|---|---|---|
 | `gpt-5.6-sol` | $5.00 | $0.50 | $6.25 | $30.00 |
-| `gpt-5.6-terra` | $2.50 | $0.25 | $3.125 | $15.00 |
-| `gpt-5.6-luna` | $1.00 | $0.10 | $1.25 | $6.00 |
+| `gpt-5.6-terra` | $2.00 | $0.20 | $2.50 | $12.00 |
+| `gpt-5.6-luna` | $0.20 | $0.02 | $0.25 | $1.20 |
 | `gpt-5.5` | $5.00 | $0.50 | $6.25 (1.25× input) | $30.00 |
 | `gpt-5.4` | $2.50 | $0.25 | $3.125 (1.25× input) | $15.00 |
 | `gpt-5.4-mini` | $0.75 | $0.075 | $0.9375 (1.25× input) | $4.50 |
@@ -35,16 +37,18 @@ GPT-5.6 Sol/Terra/Luna tiers verified 2026-07-11 at short-context standard rates
 | `gpt-4.1-nano` | $0.10 | $0.025 | $0.125 (1.25× input) | $0.40 |
 | `o1` | $15.00 | $7.50 | $18.75 (1.25× input) | $60.00 |
 | `o1-mini` | $1.10 | $0.55 | $1.375 (1.25× input) | $4.40 |
-| `o3` | $10.00 | $5.00 | $12.50 (1.25× input) | $40.00 |
+| `o3` | $2.00 | $0.50 | $2.50 (1.25× input) | $8.00 |
 | `o3-mini` | $1.10 | $0.55 | $1.375 (1.25× input) | $4.40 |
-| `o4-mini` | $1.10 | $0.55 | $1.375 (1.25× input) | $4.40 |
+| `o4-mini` | $1.10 | $0.275 | $1.375 (1.25× input) | $4.40 |
 | `gpt-4-turbo` | $10.00 | _not published_ | $12.50 (1.25× input) | $30.00 |
 | `gpt-3.5-turbo` | $0.50 | _not published_ | $0.625 (1.25× input) | $1.50 |
 
 ## Anthropic
 
-**Source:** Anthropic pricing and model documentation  
-**Verified:** 2026-07-30
+**Source:** [platform.claude.com pricing](https://platform.claude.com/docs/en/about-claude/pricing)  
+**Verified:** 2026-08-04
+
+Cache read is 0.1x input; cache write is the 5-minute-TTL rate at 1.25x input. Re-verified with no changes.
 
 | Model | Input | Cache read | Cache write | Output |
 |---|---|---|---|---|
@@ -96,16 +100,16 @@ The floating -latest aliases are priced against the current generation they reso
 
 ## xAI
 
-**Source:** [docs.x.ai Chat and Code API pricing](https://docs.x.ai)  
-**Verified:** 2026-07-08
+**Source:** [docs.x.ai models pricing](https://docs.x.ai/docs/models)  
+**Verified:** 2026-08-04
 
-grok-4.5 flagship rates verified 2026-07-11.
+Rates use the <200k context tier; xAI charges double above it and that tier is not modeled. Models below grok-4.3 are no longer listed and keep their last published rates.
 
 | Model | Input | Cache read | Cache write | Output |
 |---|---|---|---|---|
-| `grok-build` | $1.00 | _not published_ | $1.25 (1.25× input) | $2.00 |
-| `grok-4.5` | $2.00 | _not published_ | $2.50 (1.25× input) | $6.00 |
-| `grok-4.3` | $1.25 | _not published_ | $1.5625 (1.25× input) | $2.50 |
+| `grok-build` | $1.00 | $0.20 | $1.25 (1.25× input) | $2.00 |
+| `grok-4.5` | $2.00 | $0.30 | $2.50 (1.25× input) | $6.00 |
+| `grok-4.3` | $1.25 | $0.20 | $1.5625 (1.25× input) | $2.50 |
 | `grok-composer-2.5-fast` | $3.00 | _not published_ | $3.75 (1.25× input) | $15.00 |
 | `grok-4` | $5.00 | _not published_ | $6.25 (1.25× input) | $15.00 |
 | `grok-4-fast` | $0.20 | _not published_ | $0.25 (1.25× input) | $0.50 |
@@ -125,21 +129,12 @@ Standard rates. Announced peak-hour pricing at 2x has no published effective dat
 | `deepseek-v4-flash` | $0.14 | $0.0028 | $0.175 (1.25× input) | $0.28 |
 | `deepseek-v4-pro` | $0.435 | $0.0036 | $0.5437 (1.25× input) | $0.87 |
 
-## Cursor
-
-**Source:** [cursor.com/docs/models-and-pricing](https://cursor.com/docs/models-and-pricing)  
-**Verified:** 2026-07-08
-
-Composer 2.5 standard tier. The fast tier is priced under xAI.
-
-| Model | Input | Cache read | Cache write | Output |
-|---|---|---|---|---|
-| `composer-2.5` | $0.50 | $0.20 | $0.625 (1.25× input) | $2.50 |
-
 ## Z.AI
 
-**Source:** [docs.z.ai pricing](https://docs.z.ai)  
-**Verified:** 2026-07-08
+**Source:** [docs.z.ai pricing](https://docs.z.ai/guides/overview/pricing)  
+**Verified:** 2026-08-04
+
+glm-5.2 verified. The other GLM entries are no longer listed and keep their last published rates for older tracked usage.
 
 | Model | Input | Cache read | Cache write | Output |
 |---|---|---|---|---|
@@ -149,6 +144,21 @@ Composer 2.5 standard tier. The fast tier is priced under xAI.
 | `glm-5-flash` | $0.10 | _not published_ | $0.125 (1.25× input) | $0.10 |
 | `glm-4-plus` | $0.50 | _not published_ | $0.625 (1.25× input) | $1.50 |
 | `glm-4-flash` | $0.01 | _not published_ | $0.0125 (1.25× input) | $0.01 |
+
+## Cursor
+
+**Source:** _not recorded_  
+**Verified:** _not recorded_
+
+> **These rates are disputed.** Checked 2026-08-04 against [published pricing](https://cursor.com/docs/models-and-pricing).
+>
+> Cursor no longer publishes per-token rates for its own models. The Composer 2.5 rate here was sourced on 2026-07-08 but can no longer be verified against any published figure, so it should be treated as historical rather than current.
+>
+> Treat the rates below as unreliable until they are corrected.
+
+| Model | Input | Cache read | Cache write | Output |
+|---|---|---|---|---|
+| `composer-2.5` | $0.50 | $0.20 | $0.625 (1.25× input) | $2.50 |
 
 ## Intentionally unpriced
 
@@ -167,7 +177,7 @@ cannot quietly go stale.
 
 | Model | Effective | Change |
 |---|---|---|
-| `claude-sonnet-5` | 2026-08-31 | Introductory $2 input / $10 output applies through 2026-08-31, then reverts to the $3 / $15 sticker price. |
+| `claude-sonnet-5` | 2026-08-31 | Introductory $2 input / $10 output applies through 2026-08-31, then reverts to $3 / $15 with cache read $0.30 and 5-minute cache write $3.75. |
 
 ## How to read this
 

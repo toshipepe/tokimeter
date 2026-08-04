@@ -262,3 +262,25 @@ test('every downgrade suggestion points at a model that is actually priced', asy
     }
   }
 });
+
+test('re-verified 2026-08-04 rates match published pricing', async () => {
+  const { getPrice } = await import(pathToFileURL(PRICING).href);
+
+  // OpenAI, per developers.openai.com. These four were wrong before the
+  // 2026-08-04 re-verification; o3 and gpt-5.6-luna by roughly 5x.
+  assert.deepEqual([getPrice('o3').input, getPrice('o3').output], [2.00, 8.00]);
+  assert.equal(getPrice('o3').cached, 0.50);
+  assert.deepEqual([getPrice('gpt-5.6-luna').input, getPrice('gpt-5.6-luna').output], [0.20, 1.20]);
+  assert.deepEqual([getPrice('gpt-5.6-terra').input, getPrice('gpt-5.6-terra').output], [2.00, 12.00]);
+  assert.equal(getPrice('o4-mini').cached, 0.275);
+
+  // xAI publishes cache-read rates; they were previously recorded as unpriced.
+  assert.equal(getPrice('grok-4.5').cached, 0.30);
+  assert.equal(getPrice('grok-4.3').cached, 0.20);
+  assert.equal(getPrice('grok-build').cached, 0.20);
+
+  // Anthropic re-verified with no change, including the introductory rate
+  // still in effect through 2026-08-31.
+  assert.deepEqual([getPrice('claude-sonnet-5').input, getPrice('claude-sonnet-5').output], [2.00, 10.00]);
+  assert.equal(getPrice('claude-opus-5').cacheWrite, 6.25);
+});
