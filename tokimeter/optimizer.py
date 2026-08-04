@@ -65,17 +65,14 @@ DOWNGRADE_PATHS: dict[str, list[tuple[str, float]]] = {
     "grok-3": [
         ("grok-3-mini", 0.88),
     ],
-    "deepseek-r1": [
-        ("deepseek-v3", 0.92),
-    ],
-    "mistral-large-latest": [
-        ("mistral-small-latest", 0.90),
+    # deepseek-r1 -> deepseek-v3 and llama-3.1-405b -> llama-3.1-70b were
+    # dropped with their prices. A downgrade to an unpriced model would produce
+    # a savings number with nothing behind it.
+    "mistral-medium-3.5": [
+        ("mistral-small-4", 0.90),
     ],
     "command-r-plus": [
         ("command-r", 0.92),
-    ],
-    "llama-3.1-405b": [
-        ("llama-3.1-70b", 0.90),
     ],
     "glm-5-plus": [
         ("glm-5-air", 0.90),

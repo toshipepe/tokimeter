@@ -91,8 +91,8 @@ function buildPage() {
   lines.push('it marks `~$` precisely because it is not a bill. See');
   lines.push('[the pricing methodology](PRICING.md) for how that distinction is enforced.');
   lines.push('');
-  lines.push(`${PRICES.length} models across ${byProvider.size} providers.`);
-  lines.push(`${sourced.length} providers are sourced and verified.`);
+  lines.push(`${PRICES.length} models across ${byProvider.size} priced providers.`);
+  lines.push(`${sourced.filter((id) => byProvider.has(id)).length} of ${byProvider.size} are sourced and verified.`);
   if (disputed.length) {
     lines.push('');
     lines.push(`> **${disputed.length} providers below carry disputed rates.** ` +
@@ -132,6 +132,25 @@ function buildPage() {
       lines.push(`| \`${price.model}\` | ${usd(price.input)} | ${cacheRate(price.cached)} | ${cacheWriteFor(price)} | ${usd(price.output)} |`);
     }
     lines.push('');
+  }
+
+  // A provider listed in the sources file with no priced models is a
+  // deliberate decision, not an oversight. Say so, rather than letting it
+  // vanish from the page.
+  const unpriced = Object.keys(sources.providers).filter((id) => !byProvider.has(id));
+  if (unpriced.length) {
+    lines.push('## Intentionally unpriced');
+    lines.push('');
+    lines.push('Tokimeter ships no rate for these. Their usage is treated as an unknown model:');
+    lines.push('excluded from priced totals rather than valued at a number that cannot be sourced.');
+    lines.push('');
+    for (const id of unpriced) {
+      const meta = providerMeta(id);
+      lines.push(`### ${meta.label}`);
+      lines.push('');
+      lines.push(meta.note || 'No published rate could be sourced.');
+      lines.push('');
+    }
   }
 
   if (sources.scheduledChanges.length) {

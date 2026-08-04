@@ -80,29 +80,46 @@ const PRICES = [
   { provider: "anthropic", model: "claude-3-haiku",          input: 0.25,  output: 1.25,  cached: 0 },
 
   // ─── Google Gemini ────────────────────────────────────────────────────────
-  { provider: "google", model: "gemini-2.5-pro",          input: 1.25,  output: 10.00, cached: 0.3125 },
-  { provider: "google", model: "gemini-2.5-flash",        input: 0.075, output: 0.30,  cached: 0.01875 },
-  { provider: "google", model: "gemini-3-pro",            input: 2.50,  output: 15.00, cached: 0.625,
-    aliases: ["gemini-3.1-pro-preview", "gemini-3.5-pro"] },
-  { provider: "google", model: "gemini-3-flash",          input: 0.15,  output: 0.60,  cached: 0.0375,
-    aliases: ["gemini-3.5-flash"] },
-  { provider: "google", model: "gemini-3-flash-lite",     input: 0.075, output: 0.30,  cached: 0.01875 },
-  { provider: "google", model: "gemini-1.5-pro",          input: 1.25,  output: 5.00,  cached: 0.3125 },
-  { provider: "google", model: "gemini-1.5-flash",        input: 0.075, output: 0.30,  cached: 0.01875 },
+  // Verified against ai.google.dev/gemini-api/docs/pricing, 2026-08-04, at the
+  // short-context (<=200k) text tier, matching the convention used for OpenAI
+  // above. Gemini prices audio input and >200k context higher; Tokimeter does
+  // not model those tiers, so long-context and audio usage is under-valued
+  // rather than guessed.
+  { provider: "google", model: "gemini-3.6-flash",        input: 1.50,  output: 7.50,  cached: 0.15 },
+  { provider: "google", model: "gemini-3.5-flash",        input: 1.50,  output: 9.00,  cached: 0.15,
+    aliases: ["gemini-3-flash"] },
+  { provider: "google", model: "gemini-3.5-flash-lite",   input: 0.30,  output: 2.50,  cached: 0.03,
+    aliases: ["gemini-3-flash-lite"] },
+  { provider: "google", model: "gemini-3.1-flash-lite",   input: 0.25,  output: 1.50,  cached: 0.025 },
+  { provider: "google", model: "gemini-3.1-pro-preview",  input: 2.00,  output: 12.00, cached: 0.20,
+    aliases: ["gemini-3-pro", "gemini-3.5-pro"] },
+  { provider: "google", model: "gemini-2.5-pro",          input: 1.25,  output: 10.00, cached: 0.125 },
+  { provider: "google", model: "gemini-2.5-flash",        input: 0.30,  output: 2.50,  cached: 0.03 },
+  { provider: "google", model: "gemini-2.5-flash-lite",   input: 0.10,  output: 0.40,  cached: 0.01 },
 
   // ─── Mistral ──────────────────────────────────────────────────────────────
-  { provider: "mistral", model: "mistral-large-latest",   input: 2.00, output: 6.00, cached: 0 },
-  { provider: "mistral", model: "mistral-medium-latest",  input: 0.40, output: 4.00, cached: 0 },
-  { provider: "mistral", model: "mistral-small-latest",   input: 0.20, output: 0.60, cached: 0 },
-  { provider: "mistral", model: "codestral",              input: 0.30, output: 0.90, cached: 0 },
+  // Verified against mistral.ai/pricing/api, 2026-08-04. The floating -latest
+  // aliases resolve to the current generation, so they are priced against it.
+  // Mistral publishes cache-read at a 90% discount on input.
+  { provider: "mistral", model: "mistral-large-3",        input: 0.50, output: 1.50, cached: 0.05,
+    aliases: ["mistral-large-latest"] },
+  { provider: "mistral", model: "mistral-medium-3.5",     input: 1.50, output: 7.50, cached: 0.15,
+    aliases: ["mistral-medium-latest"] },
+  { provider: "mistral", model: "mistral-small-4",        input: 0.15, output: 0.60, cached: 0.015,
+    aliases: ["mistral-small-latest"] },
+  { provider: "mistral", model: "ministral-3-3b",         input: 0.10, output: 0.10, cached: 0.01 },
+  { provider: "mistral", model: "ministral-3-8b",         input: 0.15, output: 0.15, cached: 0.015 },
+  { provider: "mistral", model: "ministral-3-14b",        input: 0.20, output: 0.20, cached: 0.02 },
 
   // ─── Meta Llama ───────────────────────────────────────────────────────────
-  { provider: "meta", model: "llama-4-scout",    input: 0.20, output: 0.60, cached: 0 },
-  { provider: "meta", model: "llama-4-maverick", input: 0.27, output: 0.85, cached: 0 },
-  { provider: "meta", model: "llama-3.3-70b",    input: 0.59, output: 0.79, cached: 0 },
-  { provider: "meta", model: "llama-3.1-405b",   input: 2.70, output: 2.70, cached: 0 },
-  { provider: "meta", model: "llama-3.1-70b",    input: 0.59, output: 0.79, cached: 0 },
-  { provider: "meta", model: "llama-3.1-8b",     input: 0.05, output: 0.08, cached: 0 },
+  // Intentionally unpriced. Meta publishes no generally available first-party
+  // API pricing; its direct Llama API remains waitlisted. Llama rates come from
+  // third-party hosts such as DeepInfra, Groq, and Together, differ between
+  // them, and move over time, so no single rate can be sourced as "the" Llama
+  // price. Llama usage therefore stays outside priced totals as an unknown
+  // model, which is the same treatment every other unsourced model gets. Add a
+  // custom price for the host you actually use:
+  //   tokimeter pricing set llama-4-maverick --input <in> --output <out>
 
   // ─── xAI Grok ─────────────────────────────────────────────────────────────
   // grok-build: docs.x.ai Code API pricing (verified 2026-07-08); the Grok
@@ -128,9 +145,13 @@ const PRICES = [
   { provider: "xai", model: "grok-2",            input: 2.00, output: 10.00, cached: 0 },
 
   // ─── DeepSeek ─────────────────────────────────────────────────────────────
-  { provider: "deepseek", model: "deepseek-v3",          input: 0.27, output: 1.10, cached: 0.014 },
-  { provider: "deepseek", model: "deepseek-r1",          input: 0.55, output: 2.19, cached: 0 },
-  { provider: "deepseek", model: "deepseek-coder",       input: 0.14, output: 0.28, cached: 0 },
+  // Verified against api-docs.deepseek.com/quick_start/pricing, 2026-08-04.
+  // DeepSeek has announced peak-hour pricing at 2x standard rates (09:00-12:00
+  // and 14:00-18:00 UTC+8) with no effective date published yet. Tokimeter
+  // prices the standard rate and does not model the peak multiplier, so peak
+  // usage is under-valued rather than guessed.
+  { provider: "deepseek", model: "deepseek-v4-flash",    input: 0.14,  output: 0.28, cached: 0.0028 },
+  { provider: "deepseek", model: "deepseek-v4-pro",      input: 0.435, output: 0.87, cached: 0.003625 },
 
   // ─── Cursor ───────────────────────────────────────────────────────────────
   // Composer 2.5 standard tier per cursor.com/docs/models-and-pricing
@@ -203,11 +224,13 @@ const DOWNGRADES = {
   "claude-opus-4":     [{ model: "claude-sonnet-4", quality: 0.95 }, { model: "claude-haiku-4", quality: 0.85 }],
   "claude-sonnet-4":   [{ model: "claude-haiku-4", quality: 0.88 }],
   "gemini-2.5-pro":    [{ model: "gemini-2.5-flash", quality: 0.92 }],
-  "gemini-3-pro":      [{ model: "gemini-3-flash", quality: 0.92 }],
+  "gemini-3.1-pro-preview": [{ model: "gemini-3.5-flash", quality: 0.92 }],
   "grok-4.5":          [{ model: "grok-4-fast", quality: 0.9 }],
   "grok-4":            [{ model: "grok-4-fast", quality: 0.95 }],
-  "deepseek-r1":       [{ model: "deepseek-v3", quality: 0.92 }],
-  "mistral-large-latest": [{ model: "mistral-small-latest", quality: 0.90 }],
+  // deepseek-r1 -> deepseek-v3 and llama-3.1-405b -> llama-3.1-70b were dropped
+  // with their prices. A downgrade to an unpriced model would produce a savings
+  // number with nothing behind it.
+  "mistral-medium-3.5": [{ model: "mistral-small-4", quality: 0.90 }],
 };
 
 // ─── Pricer ─────────────────────────────────────────────────────────────────
