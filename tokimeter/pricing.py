@@ -25,12 +25,12 @@ class ModelPrice:
 # ─── OpenAI ─────────────────────────────────────────────────────────────────
 
 OPENAI_PRICES = [
-    # GPT-5.x (verified against developers.openai.com/api/docs/pricing, 2026-07-08;
-    # GPT-5.6 Sol/Terra/Luna verified 2026-07-11 — short-context standard rates,
-    # explicit cache-write pricing at 1.25x input)
+    # Verified against developers.openai.com/api/docs/pricing, 2026-08-04.
+    # 5.6+ publishes explicit cache-write pricing at 1.25x input. o1-mini is no
+    # longer listed and keeps its last published rate for older usage.
     ModelPrice("openai", "gpt-5.6-sol",       5.00,  30.00, 0.50,  (), 6.25),
-    ModelPrice("openai", "gpt-5.6-terra",     2.50,  15.00, 0.25,  (), 3.125),
-    ModelPrice("openai", "gpt-5.6-luna",      1.00,   6.00, 0.10,  (), 1.25),
+    ModelPrice("openai", "gpt-5.6-terra",     2.00,  12.00, 0.20,  (), 3.125),
+    ModelPrice("openai", "gpt-5.6-luna",      0.20,   1.20, 0.02,  (), 0.25),
     ModelPrice("openai", "gpt-5.5",           5.00,  30.00, 0.50),
     ModelPrice("openai", "gpt-5.4",           2.50,  15.00, 0.25),
     ModelPrice("openai", "gpt-5.4-mini",      0.75,   4.50, 0.075),
@@ -44,9 +44,9 @@ OPENAI_PRICES = [
     ModelPrice("openai", "gpt-4.1-nano",      0.10,  0.40, 0.025),
     ModelPrice("openai", "o1",               15.00,  60.00, 7.50),
     ModelPrice("openai", "o1-mini",           1.10,  4.40, 0.55),
-    ModelPrice("openai", "o3",               10.00,  40.00, 5.00),
+    ModelPrice("openai", "o3",                2.00,  8.00, 0.50),
     ModelPrice("openai", "o3-mini",           1.10,  4.40, 0.55),
-    ModelPrice("openai", "o4-mini",           1.10,  4.40, 0.55),
+    ModelPrice("openai", "o4-mini",           1.10,  4.40, 0.275),
     ModelPrice("openai", "gpt-4-turbo",      10.00,  30.00),
     ModelPrice("openai", "gpt-3.5-turbo",     0.50,  1.50),
 ]
@@ -54,7 +54,7 @@ OPENAI_PRICES = [
 # ─── Anthropic ──────────────────────────────────────────────────────────────
 
 ANTHROPIC_PRICES = [
-    # Verified against Anthropic pricing/model docs, 2026-07-30.
+    # Verified against platform.claude.com pricing, 2026-08-04.
     # cached = cache-read (~0.1x input); cache_write = 5-min-TTL cache-write (~1.25x input).
     ModelPrice("anthropic", "claude-fable-5",          10.00, 50.00, 1.00,
                ("claude-mythos-5",), 12.50),
@@ -134,8 +134,9 @@ LLAMA_PRICES = []
 # ─── xAI Grok ───────────────────────────────────────────────────────────────
 
 XAI_PRICES = [
-    # grok-4.5: docs.x.ai flagship (verified 2026-07-11); no cached price published.
-    ModelPrice("xai", "grok-4.5",          2.00,  6.00, 0.0, ("grok-4.5-latest",)),
+    # Verified against docs.x.ai models pricing, 2026-08-04, at the <200k tier.
+    # Models below grok-4.5 are no longer listed and keep last published rates.
+    ModelPrice("xai", "grok-4.5",          2.00,  6.00, 0.30, ("grok-4.5-latest",)),
     ModelPrice("xai", "grok-4",            5.00, 15.00),
     ModelPrice("xai", "grok-4-fast",       0.20, 0.50),
     ModelPrice("xai", "grok-3",            3.00, 15.00),

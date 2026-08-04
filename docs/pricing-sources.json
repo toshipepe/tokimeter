@@ -7,36 +7,40 @@
       "label": "OpenAI",
       "source": "developers.openai.com/api/docs/pricing",
       "url": "https://developers.openai.com/api/docs/pricing",
-      "verified": "2026-07-08",
-      "note": "GPT-5.6 Sol/Terra/Luna tiers verified 2026-07-11 at short-context standard rates."
+      "verified": "2026-08-04",
+      "note": "Standard (non-batch) text rates. o1-mini and gpt-4-turbo are no longer listed and keep their last published rates for older tracked usage."
     },
     "anthropic": {
       "label": "Anthropic",
-      "source": "Anthropic pricing and model documentation",
-      "url": null,
-      "verified": "2026-07-30",
-      "note": null
+      "source": "platform.claude.com pricing",
+      "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified": "2026-08-04",
+      "note": "Cache read is 0.1x input; cache write is the 5-minute-TTL rate at 1.25x input. Re-verified with no changes."
     },
     "xai": {
       "label": "xAI",
-      "source": "docs.x.ai Chat and Code API pricing",
-      "url": "https://docs.x.ai",
-      "verified": "2026-07-08",
-      "note": "grok-4.5 flagship rates verified 2026-07-11."
+      "source": "docs.x.ai models pricing",
+      "url": "https://docs.x.ai/docs/models",
+      "verified": "2026-08-04",
+      "note": "Rates use the <200k context tier; xAI charges double above it and that tier is not modeled. Models below grok-4.3 are no longer listed and keep their last published rates."
     },
     "cursor": {
       "label": "Cursor",
-      "source": "cursor.com/docs/models-and-pricing",
-      "url": "https://cursor.com/docs/models-and-pricing",
-      "verified": "2026-07-08",
-      "note": "Composer 2.5 standard tier. The fast tier is priced under xAI."
+      "source": null,
+      "url": null,
+      "verified": null,
+      "disputed": {
+        "checked": "2026-08-04",
+        "against": "https://cursor.com/docs/models-and-pricing",
+        "summary": "Cursor no longer publishes per-token rates for its own models. The Composer 2.5 rate here was sourced on 2026-07-08 but can no longer be verified against any published figure, so it should be treated as historical rather than current."
+      }
     },
     "zai": {
       "label": "Z.AI",
       "source": "docs.z.ai pricing",
-      "url": "https://docs.z.ai",
-      "verified": "2026-07-08",
-      "note": null
+      "url": "https://docs.z.ai/guides/overview/pricing",
+      "verified": "2026-08-04",
+      "note": "glm-5.2 verified. The other GLM entries are no longer listed and keep their last published rates for older tracked usage."
     },
     "google": {
       "label": "Google",
@@ -71,10 +75,12 @@
     {
       "model": "claude-sonnet-5",
       "effective": "2026-08-31",
-      "note": "Introductory $2 input / $10 output applies through 2026-08-31, then reverts to the $3 / $15 sticker price.",
+      "note": "Introductory $2 input / $10 output applies through 2026-08-31, then reverts to $3 / $15 with cache read $0.30 and 5-minute cache write $3.75.",
       "expectedAfter": {
         "input": 3.0,
-        "output": 15.0
+        "output": 15.0,
+        "cached": 0.3,
+        "cacheWrite": 3.75
       }
     }
   ]
