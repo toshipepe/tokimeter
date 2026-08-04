@@ -72,6 +72,12 @@ journals, transcripts, OAuth state, or credentials, and does not retain the
 local account id used for workspace discovery. Bare managed model aliases stay
 attributed to `openhuman`. Scope the report with `--tool openhuman`.
 
+These are per-request model costs, not what you pay TinyHumans. TinyHumans
+bills in credits through a monthly plan or pay-as-you-go top-ups, and a credit
+has no fixed dollar value across tiers. Tokimeter does not read your credit
+balance, credits consumed, or remaining monthly allowance, and cannot derive
+them from the cost ledger.
+
 Claude Code and Codex coverage includes local coding sessions created from
 their CLI and desktop surfaces. Regular Claude or ChatGPT chats and
 remote/cloud-only sessions are outside the report when they do not write

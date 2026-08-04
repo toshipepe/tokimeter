@@ -199,7 +199,7 @@ the report only observes.
 | Cursor CLI/Desktop Agent | Live verified | Status-line and stop hooks after `tokimeter setup cursor`; CSV import for classic editor chat | Exact per-turn usage after hook setup, local windows, and user-budget warnings. Earlier hookless turns are not reconstructed. |
 | Grok Build | Live verified | Local `~/.grok/logs`; optional stop hook for alarms | Exact recorded per-turn tokens and `~` cost. Local windows and user budgets, not a claimed vendor quota. |
 | Hermes | Live verified | Local `~/.hermes` database; no setup for reports | Provider-recorded session totals and billed cost when present; otherwise priced `~` estimates. |
-| OpenHuman | Fixture tested | Active workspace `state/costs.jsonl`; no setup for reports | Exact recorded token buckets. Provider-charged cost stays reported; OpenHuman estimates stay visibly estimated. Memory and transcript data are never read. |
+| OpenHuman | Fixture tested | Active workspace `state/costs.jsonl`; no setup for reports | Exact recorded token buckets. Costs are per-request model costs, not TinyHumans credit use or your subscription bill. Memory and transcript data are never read. |
 | opencode | Live verified with 1.17.18 | Local message files/database; no setup for reports | Recorded token counts and request-time cost when present; otherwise priced `~` estimates. |
 | Cline | Live verified with CLI 3.0.39 + Codex OAuth | Local task/session history; no setup for reports | Numeric usage and Cline's request-time cost when present. Prompt and response content are ignored. |
 | Copilot CLI / Aider | Fixture tested | Copilot file exporter or Aider history import/proxy | Parser, deduplication, accounting, and privacy behavior pass fixtures; not claimed as live-verified in this release. |
@@ -244,6 +244,13 @@ the local OpenHuman account id used to find the active workspace. A
 as `chat-v1` stay attributed to OpenHuman rather than guessing an underlying
 provider. Use `--tool openhuman` to scope a report. This reader is fixture
 tested, not claimed as live verified.
+
+These are **per-request model costs, not what you pay TinyHumans**. TinyHumans
+bills in credits through a monthly plan or pay-as-you-go top-ups, and a credit
+has no fixed dollar value across tiers. Tokimeter does not read your credit
+balance, credits consumed, or remaining monthly allowance, and it cannot derive
+them from the cost ledger. Read these numbers as what the usage cost at model
+rates, not as an invoice.
 
 **opencode**: tracked automatically, zero setup. opencode stores per-message
 token counts locally (`~/.local/share/opencode`, or `OPENCODE_DATA_DIR`);
