@@ -5,6 +5,26 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+### Pricing
+
+- Correct Google, Mistral, and DeepSeek rates against each provider's published
+  pricing, verified 2026-08-04. Several were substantially wrong: Gemini 2.5
+  Flash was priced at `$0.075/$0.30` against a published `$0.30/$2.50`, and
+  Gemini 3 Flash at `$0.15/$0.60` against `$1.50/$9.00`.
+- Price Mistral's floating `-latest` aliases against the generation they
+  actually resolve to, and record Mistral's published cache-read discount
+  instead of treating cache reads as unpriced.
+- Replace the delisted DeepSeek models with the currently published ones.
+- Stop shipping a built-in price for Meta Llama models. Meta publishes no
+  generally available first-party API pricing, so Llama usage is now treated as
+  an unknown model and excluded from priced totals rather than valued at a rate
+  that cannot be sourced. Set a custom price for the host you actually use.
+- Drop downgrade suggestions that pointed at models which are no longer priced,
+  so a savings figure can never be computed against an unpriced target.
+- Publish every rate with its source and verification date in `docs/PRICES.md`,
+  generated from the same table the CLI prices with, and fail CI when a
+  provider's verification goes stale or a dated rate change comes due.
+
 ## 0.5.10 — 2026-08-03
 
 ### Fixed

@@ -9,10 +9,8 @@ them to locally recorded token counts to produce an API-equivalent value, which
 it marks `~$` precisely because it is not a bill. See
 [the pricing methodology](PRICING.md) for how that distinction is enforced.
 
-66 models across 9 providers.
-5 providers are sourced and verified.
-
-> **4 providers below carry disputed rates.** Google, Mistral, Meta, DeepSeek were checked against their published pricing and did not match. Their sections say so, and their numbers should not be relied on until they are corrected. They are listed here rather than quietly omitted because hiding them would be the dishonest option.
+62 models across 8 priced providers.
+8 of 8 are sourced and verified.
 
 ## OpenAI
 
@@ -62,6 +60,40 @@ GPT-5.6 Sol/Terra/Luna tiers verified 2026-07-11 at short-context standard rates
 | `claude-3-opus` | $15.00 | _not published_ | $18.75 (1.25× input) | $75.00 |
 | `claude-3-haiku` | $0.25 | _not published_ | $0.3125 (1.25× input) | $1.25 |
 
+## Google
+
+**Source:** [ai.google.dev Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)  
+**Verified:** 2026-08-04
+
+Short-context (<=200k) text tier. Gemini prices audio input and >200k context higher; those tiers are not modeled, so such usage is under-valued rather than guessed.
+
+| Model | Input | Cache read | Cache write | Output |
+|---|---|---|---|---|
+| `gemini-3.6-flash` | $1.50 | $0.15 | $1.875 (1.25× input) | $7.50 |
+| `gemini-3.5-flash` | $1.50 | $0.15 | $1.875 (1.25× input) | $9.00 |
+| `gemini-3.5-flash-lite` | $0.30 | $0.03 | $0.375 (1.25× input) | $2.50 |
+| `gemini-3.1-flash-lite` | $0.25 | $0.025 | $0.3125 (1.25× input) | $1.50 |
+| `gemini-3.1-pro-preview` | $2.00 | $0.20 | $2.50 (1.25× input) | $12.00 |
+| `gemini-2.5-pro` | $1.25 | $0.125 | $1.5625 (1.25× input) | $10.00 |
+| `gemini-2.5-flash` | $0.30 | $0.03 | $0.375 (1.25× input) | $2.50 |
+| `gemini-2.5-flash-lite` | $0.10 | $0.01 | $0.125 (1.25× input) | $0.40 |
+
+## Mistral
+
+**Source:** [mistral.ai/pricing/api](https://mistral.ai/pricing/api/)  
+**Verified:** 2026-08-04
+
+The floating -latest aliases are priced against the current generation they resolve to. Cache read is Mistral's published 90 percent discount.
+
+| Model | Input | Cache read | Cache write | Output |
+|---|---|---|---|---|
+| `mistral-large-3` | $0.50 | $0.05 | $0.625 (1.25× input) | $1.50 |
+| `mistral-medium-3.5` | $1.50 | $0.15 | $1.875 (1.25× input) | $7.50 |
+| `mistral-small-4` | $0.15 | $0.015 | $0.1875 (1.25× input) | $0.60 |
+| `ministral-3-3b` | $0.10 | $0.01 | $0.125 (1.25× input) | $0.10 |
+| `ministral-3-8b` | $0.15 | $0.015 | $0.1875 (1.25× input) | $0.15 |
+| `ministral-3-14b` | $0.20 | $0.02 | $0.25 (1.25× input) | $0.20 |
+
 ## xAI
 
 **Source:** [docs.x.ai Chat and Code API pricing](https://docs.x.ai)  
@@ -80,6 +112,18 @@ grok-4.5 flagship rates verified 2026-07-11.
 | `grok-3` | $3.00 | _not published_ | $3.75 (1.25× input) | $15.00 |
 | `grok-3-mini` | $0.30 | _not published_ | $0.375 (1.25× input) | $0.50 |
 | `grok-2` | $2.00 | _not published_ | $2.50 (1.25× input) | $10.00 |
+
+## DeepSeek
+
+**Source:** [api-docs.deepseek.com pricing](https://api-docs.deepseek.com/quick_start/pricing)  
+**Verified:** 2026-08-04
+
+Standard rates. Announced peak-hour pricing at 2x has no published effective date and is not modeled, so peak usage is under-valued rather than guessed.
+
+| Model | Input | Cache read | Cache write | Output |
+|---|---|---|---|---|
+| `deepseek-v4-flash` | $0.14 | $0.0028 | $0.175 (1.25× input) | $0.28 |
+| `deepseek-v4-pro` | $0.435 | $0.0036 | $0.5437 (1.25× input) | $0.87 |
 
 ## Cursor
 
@@ -106,81 +150,14 @@ Composer 2.5 standard tier. The fast tier is priced under xAI.
 | `glm-4-plus` | $0.50 | _not published_ | $0.625 (1.25× input) | $1.50 |
 | `glm-4-flash` | $0.01 | _not published_ | $0.0125 (1.25× input) | $0.01 |
 
-## Google
+## Intentionally unpriced
 
-**Source:** _not recorded_  
-**Verified:** _not recorded_
+Tokimeter ships no rate for these. Their usage is treated as an unknown model:
+excluded from priced totals rather than valued at a number that cannot be sourced.
 
-> **These rates are disputed.** Checked 2026-08-04 against [published pricing](https://ai.google.dev/gemini-api/docs/pricing).
->
-> Built-in rates disagree with currently published pricing. gemini-2.5-flash is listed at $0.075 / $0.30 against a published $0.30 / $2.50, and gemini-3-flash at $0.15 / $0.60 against a published $1.50 / $9.00. gemini-2.5-pro input and output match the published short-context tier, but its cache-read rate does not. gemini-1.5-pro and gemini-1.5-flash no longer appear on the pricing page. Gemini also tiers rates above 200k context, which the built-in table does not model.
->
-> Treat the rates below as unreliable until they are corrected.
+### Meta
 
-| Model | Input | Cache read | Cache write | Output |
-|---|---|---|---|---|
-| `gemini-2.5-pro` | $1.25 | $0.3125 | $1.5625 (1.25× input) | $10.00 |
-| `gemini-2.5-flash` | $0.075 | $0.0187 | $0.0938 (1.25× input) | $0.30 |
-| `gemini-3-pro` | $2.50 | $0.625 | $3.125 (1.25× input) | $15.00 |
-| `gemini-3-flash` | $0.15 | $0.0375 | $0.1875 (1.25× input) | $0.60 |
-| `gemini-3-flash-lite` | $0.075 | $0.0187 | $0.0938 (1.25× input) | $0.30 |
-| `gemini-1.5-pro` | $1.25 | $0.3125 | $1.5625 (1.25× input) | $5.00 |
-| `gemini-1.5-flash` | $0.075 | $0.0187 | $0.0938 (1.25× input) | $0.30 |
-
-## Mistral
-
-**Source:** _not recorded_  
-**Verified:** _not recorded_
-
-> **These rates are disputed.** Checked 2026-08-04 against [published pricing](https://mistral.ai/pricing/api/).
->
-> The built-in table prices the floating `-latest` aliases at rates from an older model generation. Published pricing lists Mistral Large 3 at $0.50 / $1.50 against a built-in $2.00 / $6.00, and Mistral Medium 3.5 at $1.50 / $7.50 against a built-in $0.40 / $4.00. Mistral now publishes a cache-read rate at a 90 percent discount, which the built-in table records as 0. `codestral` no longer appears on the pricing page.
->
-> Treat the rates below as unreliable until they are corrected.
-
-| Model | Input | Cache read | Cache write | Output |
-|---|---|---|---|---|
-| `mistral-large-latest` | $2.00 | _not published_ | $2.50 (1.25× input) | $6.00 |
-| `mistral-medium-latest` | $0.40 | _not published_ | $0.50 (1.25× input) | $4.00 |
-| `mistral-small-latest` | $0.20 | _not published_ | $0.25 (1.25× input) | $0.60 |
-| `codestral` | $0.30 | _not published_ | $0.375 (1.25× input) | $0.90 |
-
-## Meta
-
-**Source:** _not recorded_  
-**Verified:** _not recorded_
-
-> **These rates are disputed.** Checked 2026-08-04 against published pricing.
->
-> Meta publishes no generally available first-party API pricing; its direct Llama API remains waitlisted. Llama rates come from third-party hosts such as DeepInfra, Groq, and Together, differ between them, and move over time, so no single authoritative rate exists to cite. The built-in numbers cannot be sourced as published Meta pricing.
->
-> Treat the rates below as unreliable until they are corrected.
-
-| Model | Input | Cache read | Cache write | Output |
-|---|---|---|---|---|
-| `llama-4-scout` | $0.20 | _not published_ | $0.25 (1.25× input) | $0.60 |
-| `llama-4-maverick` | $0.27 | _not published_ | $0.3375 (1.25× input) | $0.85 |
-| `llama-3.3-70b` | $0.59 | _not published_ | $0.7375 (1.25× input) | $0.79 |
-| `llama-3.1-405b` | $2.70 | _not published_ | $3.375 (1.25× input) | $2.70 |
-| `llama-3.1-70b` | $0.59 | _not published_ | $0.7375 (1.25× input) | $0.79 |
-| `llama-3.1-8b` | $0.05 | _not published_ | $0.0625 (1.25× input) | $0.08 |
-
-## DeepSeek
-
-**Source:** _not recorded_  
-**Verified:** _not recorded_
-
-> **These rates are disputed.** Checked 2026-08-04 against [published pricing](https://api-docs.deepseek.com/quick_start/pricing).
->
-> None of the built-in DeepSeek models appear on the current pricing page, which lists deepseek-v4-flash and deepseek-v4-pro. DeepSeek has also announced peak-hour pricing at 2x standard rates, with an effective date still pending, which the built-in table does not model.
->
-> Treat the rates below as unreliable until they are corrected.
-
-| Model | Input | Cache read | Cache write | Output |
-|---|---|---|---|---|
-| `deepseek-v3` | $0.27 | $0.014 | $0.3375 (1.25× input) | $1.10 |
-| `deepseek-r1` | $0.55 | _not published_ | $0.6875 (1.25× input) | $2.19 |
-| `deepseek-coder` | $0.14 | _not published_ | $0.175 (1.25× input) | $0.28 |
+Intentionally unpriced. Meta publishes no generally available first-party API pricing and its direct Llama API remains waitlisted. Llama rates come from third-party hosts that differ from each other, so no single rate can be sourced. Llama usage stays outside priced totals as an unknown model. Set a custom price for the host you use.
 
 ## Scheduled rate changes
 

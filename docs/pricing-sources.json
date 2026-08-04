@@ -40,47 +40,31 @@
     },
     "google": {
       "label": "Google",
-      "source": null,
-      "url": null,
-      "verified": null,
-      "disputed": {
-        "checked": "2026-08-04",
-        "against": "https://ai.google.dev/gemini-api/docs/pricing",
-        "summary": "Built-in rates disagree with currently published pricing. gemini-2.5-flash is listed at $0.075 / $0.30 against a published $0.30 / $2.50, and gemini-3-flash at $0.15 / $0.60 against a published $1.50 / $9.00. gemini-2.5-pro input and output match the published short-context tier, but its cache-read rate does not. gemini-1.5-pro and gemini-1.5-flash no longer appear on the pricing page. Gemini also tiers rates above 200k context, which the built-in table does not model."
-      }
+      "source": "ai.google.dev Gemini API pricing",
+      "url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "verified": "2026-08-04",
+      "note": "Short-context (<=200k) text tier. Gemini prices audio input and >200k context higher; those tiers are not modeled, so such usage is under-valued rather than guessed."
     },
     "mistral": {
       "label": "Mistral",
-      "source": null,
-      "url": null,
-      "verified": null,
-      "disputed": {
-        "checked": "2026-08-04",
-        "against": "https://mistral.ai/pricing/api/",
-        "summary": "The built-in table prices the floating `-latest` aliases at rates from an older model generation. Published pricing lists Mistral Large 3 at $0.50 / $1.50 against a built-in $2.00 / $6.00, and Mistral Medium 3.5 at $1.50 / $7.50 against a built-in $0.40 / $4.00. Mistral now publishes a cache-read rate at a 90 percent discount, which the built-in table records as 0. `codestral` no longer appears on the pricing page."
-      }
+      "source": "mistral.ai/pricing/api",
+      "url": "https://mistral.ai/pricing/api/",
+      "verified": "2026-08-04",
+      "note": "The floating -latest aliases are priced against the current generation they resolve to. Cache read is Mistral's published 90 percent discount."
     },
     "meta": {
       "label": "Meta",
       "source": null,
       "url": null,
       "verified": null,
-      "disputed": {
-        "checked": "2026-08-04",
-        "against": null,
-        "summary": "Meta publishes no generally available first-party API pricing; its direct Llama API remains waitlisted. Llama rates come from third-party hosts such as DeepInfra, Groq, and Together, differ between them, and move over time, so no single authoritative rate exists to cite. The built-in numbers cannot be sourced as published Meta pricing."
-      }
+      "note": "Intentionally unpriced. Meta publishes no generally available first-party API pricing and its direct Llama API remains waitlisted. Llama rates come from third-party hosts that differ from each other, so no single rate can be sourced. Llama usage stays outside priced totals as an unknown model. Set a custom price for the host you use."
     },
     "deepseek": {
       "label": "DeepSeek",
-      "source": null,
-      "url": null,
-      "verified": null,
-      "disputed": {
-        "checked": "2026-08-04",
-        "against": "https://api-docs.deepseek.com/quick_start/pricing",
-        "summary": "None of the built-in DeepSeek models appear on the current pricing page, which lists deepseek-v4-flash and deepseek-v4-pro. DeepSeek has also announced peak-hour pricing at 2x standard rates, with an effective date still pending, which the built-in table does not model."
-      }
+      "source": "api-docs.deepseek.com pricing",
+      "url": "https://api-docs.deepseek.com/quick_start/pricing",
+      "verified": "2026-08-04",
+      "note": "Standard rates. Announced peak-hour pricing at 2x has no published effective date and is not modeled, so peak usage is under-valued rather than guessed."
     }
   },
   "scheduledChanges": [
@@ -88,7 +72,10 @@
       "model": "claude-sonnet-5",
       "effective": "2026-08-31",
       "note": "Introductory $2 input / $10 output applies through 2026-08-31, then reverts to the $3 / $15 sticker price.",
-      "expectedAfter": { "input": 3.0, "output": 15.0 }
+      "expectedAfter": {
+        "input": 3.0,
+        "output": 15.0
+      }
     }
   ]
 }
