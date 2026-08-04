@@ -321,6 +321,10 @@ and are captured live.
   output. See the compact [pricing methodology](docs/PRICING.md) for cache
   defaults, provenance precedence, subscriptions, invoices, and unknown models.
 
+Every rate Tokimeter uses is published with its source and verification date in
+[AI coding model prices](docs/PRICES.md). That table is generated from the same
+data the CLI prices with, so the page and the tool cannot disagree.
+
 ## What Tokimeter is for
 
 Tokimeter is built for people who want a no-account local report, explicit

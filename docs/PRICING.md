@@ -1,5 +1,9 @@
 # Pricing methodology
 
+Every built-in rate, with its source and verification date, is published in
+[AI coding model prices](PRICES.md). That page is generated from the same table
+the CLI uses, so it cannot drift from what Tokimeter actually charges.
+
 Tokimeter separates usage measurement from dollar valuation.
 
 | Part | Method |

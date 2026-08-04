@@ -1,0 +1,78 @@
+{
+  "_comment": "Provenance for the built-in price table in ts/packages/core/src/pricing.js. Every entry records only what was actually verified against a provider's published pricing. A provider with no recorded source keeps null; it is never filled in with a guess. Used by scripts/generate-pricing-table.mjs to build docs/PRICES.md and to fail CI on stale or expired rates.",
+  "stalenessWarnDays": 120,
+  "stalenessFailDays": 180,
+  "providers": {
+    "openai": {
+      "label": "OpenAI",
+      "source": "developers.openai.com/api/docs/pricing",
+      "url": "https://developers.openai.com/api/docs/pricing",
+      "verified": "2026-07-08",
+      "note": "GPT-5.6 Sol/Terra/Luna tiers verified 2026-07-11 at short-context standard rates."
+    },
+    "anthropic": {
+      "label": "Anthropic",
+      "source": "Anthropic pricing and model documentation",
+      "url": null,
+      "verified": "2026-07-30",
+      "note": null
+    },
+    "xai": {
+      "label": "xAI",
+      "source": "docs.x.ai Chat and Code API pricing",
+      "url": "https://docs.x.ai",
+      "verified": "2026-07-08",
+      "note": "grok-4.5 flagship rates verified 2026-07-11."
+    },
+    "cursor": {
+      "label": "Cursor",
+      "source": "cursor.com/docs/models-and-pricing",
+      "url": "https://cursor.com/docs/models-and-pricing",
+      "verified": "2026-07-08",
+      "note": "Composer 2.5 standard tier. The fast tier is priced under xAI."
+    },
+    "zai": {
+      "label": "Z.AI",
+      "source": "docs.z.ai pricing",
+      "url": "https://docs.z.ai",
+      "verified": "2026-07-08",
+      "note": null
+    },
+    "google": {
+      "label": "Google",
+      "source": null,
+      "url": null,
+      "verified": null,
+      "note": "No source or verification date is recorded in the built-in table."
+    },
+    "mistral": {
+      "label": "Mistral",
+      "source": null,
+      "url": null,
+      "verified": null,
+      "note": "No source or verification date is recorded in the built-in table."
+    },
+    "meta": {
+      "label": "Meta",
+      "source": null,
+      "url": null,
+      "verified": null,
+      "note": "No source or verification date is recorded in the built-in table."
+    },
+    "deepseek": {
+      "label": "DeepSeek",
+      "source": null,
+      "url": null,
+      "verified": null,
+      "note": "No source or verification date is recorded in the built-in table."
+    }
+  },
+  "scheduledChanges": [
+    {
+      "model": "claude-sonnet-5",
+      "effective": "2026-08-31",
+      "note": "Introductory $2 input / $10 output applies through 2026-08-31, then reverts to the $3 / $15 sticker price.",
+      "expectedAfter": { "input": 3.0, "output": 15.0 }
+    }
+  ]
+}
