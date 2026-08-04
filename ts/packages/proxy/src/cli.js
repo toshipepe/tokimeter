@@ -28,7 +28,7 @@ import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import http from 'node:http';
-import { readClaudeUsageEvents, readClaudeAgentActivity, readCodexTokenEvents, readAiderHistoryEvents, readGrokUsageEvents, readGrokSessionMeta, analyzeLogFileFormat, readCodexRateLimitSnapshots, classifyCodexRateLimitWindows, buildHermesSessionQuery, hermesRowsToEvents, buildDelegationReport, buildAgentBreakdown, buildOrchestrationReport, buildBurnReport, buildBurnPlanner, buildSavingsReport, buildRoutingPolicy, formatRoutingPolicy, renderReportMarkdown, renderReportHtml, buildSessionTrace, buildMonthCard, renderMonthCardSvg, readOpencodeMessageFile, opencodeRowsToEvents, readClineTaskEvents, readClineSessionEvents, readCopilotOtelEvents, cursorStopPayloadToRecord, readCursorUsageEvents, parseCursorUsageCsv, recentCodexRolloutFiles as recentCodexRolloutFilesShared } from './parsers.js';
+import { readClaudeUsageEvents, readClaudeAgentActivity, readCodexTokenEvents, readAiderHistoryEvents, readGrokUsageEvents, readGrokSessionMeta, analyzeLogFileFormat, readCodexRateLimitSnapshots, classifyCodexRateLimitWindows, buildHermesSessionQuery, hermesRowsToEvents, buildDelegationReport, buildAgentBreakdown, buildOrchestrationReport, buildBurnReport, buildBurnPlanner, buildSavingsReport, buildRoutingPolicy, formatRoutingPolicy, renderReportMarkdown, renderReportHtml, buildSessionTrace, buildMonthCard, renderMonthCardSvg, readOpencodeMessageFile, opencodeRowsToEvents, readClineTaskEvents, readClineSessionEvents, readCopilotOtelEvents, cursorStopPayloadToRecord, readCursorUsageEvents, parseCursorUsageCsv, readOpenHumanCostEvents, openHumanWorkspaceCandidates, recentCodexRolloutFiles as recentCodexRolloutFilesShared } from './parsers.js';
 import {
   chunkCloudEvents,
   clearCloudPause,
@@ -2783,6 +2783,7 @@ async function runDoctor() {
   for (const [label, files, kind] of [
     ['Claude log format', recentClaudeTranscriptFiles({ limit: 5 }), 'claude'],
     ['Codex log format', recentCodexRolloutFiles({ limit: 5 }), 'codex'],
+    ['OpenHuman cost format', openHumanCostsFile() ? [openHumanCostsFile()] : [], 'openhuman'],
   ]) {
     if (files.length === 0) {
       printDoctorLine(label, true, 'no recent local logs to sample');
@@ -4066,6 +4067,38 @@ function readHermesUsageEvents({ sinceMs = 0 } = {}) {
   return hermesRowsToEvents(readHermesSessionRows(HERMES_STATE_DB), { sinceMs });
 }
 
+// ─── OpenHuman: active workspace cost ledger ────────────────────────────────
+// Discovery reads only OpenHuman's two tiny active-path markers, then the
+// numeric costs.jsonl ledger. It never opens memory, transcript, run-journal,
+// configuration, or OAuth files.
+function readLocalText(filePath) {
+  try {
+    return readFileSync(filePath, 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+function openHumanCostsFile() {
+  const root = join(homedir(), '.openhuman');
+  const workspaces = openHumanWorkspaceCandidates({
+    homeDir: homedir(),
+    explicitWorkspace: process.env.OPENHUMAN_WORKSPACE || '',
+    activeUserText: readLocalText(join(root, 'active_user.toml')),
+    activeWorkspaceText: readLocalText(join(root, 'active_workspace.toml')),
+  });
+  for (const workspace of workspaces) {
+    const file = join(workspace, 'state', 'costs.jsonl');
+    if (existsSync(file)) return file;
+  }
+  return '';
+}
+
+function collectOpenHumanUsageEvents({ sinceMs = 0 } = {}) {
+  const file = openHumanCostsFile();
+  return file ? readOpenHumanCostEvents(file, { sinceMs }) : [];
+}
+
 // ─── opencode: JSON message files + opencode.db (1.2+) ───────────────────────
 // Data dir honors OPENCODE_DATA_DIR like opencode itself. Message→event
 // mapping lives in parsers.js so it's fixture-testable; this wrapper only
@@ -4284,6 +4317,9 @@ function collectLocalUsageEvents({ maxAgeMs, toolFilter = null, providerFilter =
   if (!toolFilter || toolFilter === 'hermes') {
     addEvents(readHermesUsageEvents({ sinceMs }));
   }
+  if (!toolFilter || toolFilter === 'openhuman') {
+    addEvents(collectOpenHumanUsageEvents({ sinceMs }));
+  }
   if (!toolFilter || toolFilter === 'opencode') {
     addEvents(collectOpencodeUsageEvents({ sinceMs }));
   }
@@ -4313,7 +4349,9 @@ function collectLocalUsageEvents({ maxAgeMs, toolFilter = null, providerFilter =
     // A tool-reported billed cost (e.g. Hermes actual_cost_usd) wins over
     // our estimate.
     if (Number(event.totalCost) > 0) continue;
-    const disjoint = event.provider === 'anthropic' || event.cachedDisjoint === true;
+    const disjoint = event.cachedDisjoint === false
+      ? false
+      : event.provider === 'anthropic' || event.cachedDisjoint === true;
     const cost = priceCall(
       event.model,
       event.inputTokens || 0,
@@ -5534,7 +5572,7 @@ function buildReport(events, { days, toolFilter, providerFilter, activities = []
     windowDays: days,
     toolFilter: toolFilter || 'all',
     providerFilter: providerFilter || 'all',
-    costBasis: 'priced totals use provider-reported costs or sourced API rates; subscription values are API-equivalent, not invoices; unknown-model fallback is excluded and shown separately',
+    costBasis: 'priced totals use provider/tool-reported costs, tool-recorded estimates, or sourced API rates; subscription values are API-equivalent, not invoices; unknown-model fallback is excluded and shown separately',
     totals: { ...totals, cost: round2(totals.cost), roughEstimateCost: round2(totals.roughEstimateCost) },
     today: { ...today, cost: round2(today.cost), roughEstimateCost: round2(today.roughEstimateCost) },
     last7Days: { ...week, cost: round2(week.cost), roughEstimateCost: round2(week.roughEstimateCost) },
@@ -5571,6 +5609,7 @@ function normalizePricingConfidence(value) {
   if (value === 'feed' || value === 'community') return 'community feed';
   if (value === 'custom') return 'custom local';
   if (value === 'reported') return 'provider/tool reported';
+  if (value === 'estimated') return 'tool estimated';
   if (value === 'internal') return 'internal / unpriced';
   return 'fallback / unpriced';
 }
@@ -6098,7 +6137,9 @@ function summarizeCalls(calls) {
 // subscription); only calls proxied with a real API key are actually billed.
 function isEstimatedCall(call) {
   const source = String(call?.source || '');
-  return source.startsWith('claude-transcript')
+  return call?.costSource === 'estimated'
+    || call?.pricingConfidence === 'estimated'
+    || source.startsWith('claude-transcript')
     || source.startsWith('codex-rollout')
     || source.startsWith('codex-cli')
     || source === 'manual';
@@ -6217,6 +6258,7 @@ function pricingConfidenceLabel(confidence) {
   if (confidence === 'custom') return 'custom pricing';
   if (confidence === 'community' || confidence === 'feed') return 'community pricing';
   if (confidence === 'reported') return 'reported cost';
+  if (confidence === 'estimated') return 'tool estimate';
   if (confidence === 'fallback') return 'unpriced';
   return 'verified built-in pricing';
 }
@@ -6397,7 +6439,7 @@ function printHelp() {
     tokimeter status             Show proxy status and cost summary
     tokimeter report             Zero-setup usage report from local logs (no proxy needed)
     tokimeter report --days=7 --tool claude --json
-    tokimeter report --tool opencode     Scope to one tool (also: claude, codex, grok, hermes, cline, copilot, cursor)
+    tokimeter report --tool opencode     Scope to one tool (also: claude, codex, grok, hermes, openhuman, cline, copilot, cursor)
     tokimeter report --provider xai      Roll up one provider across tools (for example Grok Build + Hermes xAI OAuth)
     tokimeter export --days=30 > usage.json   JSON export (loadable by the Pro dashboard)
     tokimeter report --md > report.md         Shareable Markdown report (also --html)
