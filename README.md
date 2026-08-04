@@ -1,5 +1,5 @@
 <h1>
-  <a href="https://github.com/toshipepe/tokimeter/releases/latest"><img src="readme-badges.svg" width="358" height="40" alt="npm v0.5.6, release v0.5.4, MIT license, Node 18+" align="right" hspace="2"></a>
+  <a href="https://github.com/toshipepe/tokimeter/releases/latest"><img src="readme-badges.svg" width="374" height="40" alt="npm v0.5.10, release v0.5.10, MIT license, Node 18+" align="right" hspace="2"></a>
   <img src="readme-wordmark.svg" width="190" height="48" alt="Tokimeter">
 </h1>
 
@@ -22,7 +22,7 @@ Runs one private report from the usage metadata already on your machine.
 Reports, budgets, limit warnings, live status-line HUDs, and more:
 
 ```bash
-npm install -g tokimeter && "$(npm prefix -g)/bin/tokimeter" setup --auto
+npx tokimeter install
 ```
 
 <p align="center">
@@ -76,11 +76,17 @@ configuration, or API keys are needed.
 
 ## Setup details
 
-Preview every file and process action first, with no mutation:
+`npx tokimeter install` installs the same Tokimeter version globally, runs the
+reviewable `setup --auto` flow, and verifies the result. It is an explicit CLI
+command, not an automatic npm lifecycle script. Preview it without changing
+anything:
 
 ```bash
-tokimeter setup --auto --dry-run
+npx tokimeter install --dry-run
 ```
+
+For an existing global installation, `tokimeter setup --auto --dry-run` still
+previews only the setup actions.
 
 Close and reopen your terminal when setup finishes. Then keep using `codex`,
 `claude`, and your other supported tools normally; Tokimeter keeps its local
@@ -95,9 +101,7 @@ may still need its own global Tokimeter install. If a launcher created by an
 older Tokimeter release fails with `MODULE_NOT_FOUND`, repair it once with:
 
 ```bash
-npm install -g tokimeter
-"$(npm prefix -g)/bin/tokimeter" setup --auto
-hash -r
+npx tokimeter install
 ```
 
 ## Am I about to hit my limit?

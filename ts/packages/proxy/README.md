@@ -27,7 +27,7 @@ Runs one private report from the usage metadata already on your machine.
 Reports, budgets, limit warnings, live status-line HUDs, and more:
 
 ```bash
-npm install -g tokimeter && "$(npm prefix -g)/bin/tokimeter" setup --auto
+npx tokimeter install
 ```
 
 ## Why Tokimeter exists
@@ -75,9 +75,14 @@ account identity or credential is read or stored.
 
 ## Setup details
 
-Run `tokimeter setup --auto --dry-run` to print every planned file/process
-action without changing anything. `tokimeter uninstall` restores prior
-supported-tool settings and removes Tokimeter-generated setup files.
+`npx tokimeter install` installs the same Tokimeter version globally, runs the
+reviewable `setup --auto` flow, and verifies the result. It is an explicit CLI
+command, not an automatic npm lifecycle script. Run
+`npx tokimeter install --dry-run` to preview the install and setup without
+changing anything. For an existing global installation,
+`tokimeter setup --auto --dry-run` previews only the setup actions.
+`tokimeter uninstall` restores prior supported-tool settings and removes
+Tokimeter-generated setup files.
 
 Close and reopen your terminal when setup finishes. Then keep using `codex`,
 `claude`, and your other supported tools normally. Calling the executable by
@@ -91,9 +96,7 @@ Node version. To migrate a launcher written by an older release after a
 `MODULE_NOT_FOUND` error:
 
 ```bash
-npm install -g tokimeter
-"$(npm prefix -g)/bin/tokimeter" setup --auto
-hash -r
+npx tokimeter install
 ```
 
 ## Limits: the 5-hour window

@@ -16,6 +16,7 @@ import {
   buildHermesSessionQuery,
   hermesRowsToEvents,
   readClaudeAgentActivity,
+  classifyCodexRateLimitWindows,
   buildDelegationReport,
   buildAgentBreakdown,
   buildOrchestrationReport,
@@ -242,6 +243,32 @@ test('codex edge fixture: rate-limit snapshots expose 5h/7d windows', () => {
   assert.equal(last.secondary.windowMinutes, 10080);
   assert.equal(last.secondary.usedPercent, 57);
   assert.equal(last.secondary.resetsAtMs, 1783889187000);
+});
+
+test('codex rate limits: weekly-only primary is classified from duration', () => {
+  const weekly = { usedPercent: 41, windowMinutes: 10080, resetsAtMs: 1783889187000 };
+  assert.deepEqual(classifyCodexRateLimitWindows({ primary: weekly, secondary: null }), [
+    { window: weekly, kind: 'weekly', label: 'Weekly' },
+  ]);
+});
+
+test('codex rate limits: normal and reversed slots are ordered by duration', () => {
+  const fiveHour = { usedPercent: 4, windowMinutes: 300, resetsAtMs: 1783463415000 };
+  const weekly = { usedPercent: 56, windowMinutes: 10080, resetsAtMs: 1783889187000 };
+  const expected = [
+    { window: fiveHour, kind: '5h', label: '5h window' },
+    { window: weekly, kind: 'weekly', label: 'Weekly' },
+  ];
+
+  assert.deepEqual(classifyCodexRateLimitWindows({ primary: fiveHour, secondary: weekly }), expected);
+  assert.deepEqual(classifyCodexRateLimitWindows({ primary: weekly, secondary: fiveHour }), expected);
+});
+
+test('codex rate limits: unfamiliar duration gets a literal label and no invented kind', () => {
+  const unfamiliar = { usedPercent: 12, windowMinutes: 360, resetsAtMs: 1783463415000 };
+  assert.deepEqual(classifyCodexRateLimitWindows({ primary: unfamiliar }), [
+    { window: unfamiliar, kind: null, label: '6h window' },
+  ]);
 });
 
 test('parsers: huge lines, non-UTF8 bytes, and binary junk never crash', () => {

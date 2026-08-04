@@ -5,6 +5,65 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+## 0.5.10 — 2026-08-03
+
+### Fixed
+
+- Keep `setup --auto` from failing when the shell configuration file cannot be
+  written. NixOS and Home Manager users have a read-only `.bashrc` or `.zshrc`
+  linked into the Nix store, which previously crashed setup with `EACCES` after
+  the shims had already been created.
+- Leave a Nix/Home Manager-managed shell file untouched instead of appending to
+  it, and print the declarative `home.sessionPath` option alongside the manual
+  `export PATH` line.
+- Report the affected file and error code as a warning, and keep the created
+  shims, so setup still finishes successfully.
+- Distinguish three PATH states in setup verification, `doctor`, and `ready`:
+  active in the current shell, configured in a shell file, or needing manual or
+  declarative setup.
+- Stop `uninstall` from failing when a shell configuration file cannot be read
+  or written.
+
+## 0.5.9 — 2026-08-03
+
+### Changed
+
+- Point the npm package homepage to `https://tokimeter.com` while keeping the
+  source repository and issue tracker linked to GitHub.
+
+## 0.5.8 — 2026-08-02
+
+### Fixed
+
+- Classify Codex vendor-reported rate-limit windows by their recorded duration
+  instead of assuming the primary slot is five hours and the secondary slot is
+  weekly.
+- Label a weekly-only primary window correctly, order reversed five-hour and
+  weekly slots consistently, and display unfamiliar durations literally
+  without inventing quota semantics.
+- Preserve the same duration classification when syncing supported Codex limit
+  snapshots to the optional hosted dashboard.
+
+## 0.5.7 — 2026-08-02
+
+### Added
+
+- Add `npx tokimeter install` as the single public command for installing the
+  stable global runtime, configuring supported local integrations, and
+  verifying setup.
+- Add `npx tokimeter install --dry-run` to preview the package and setup actions
+  without changing packages, files, processes, or settings.
+- Pin installation to the same package version already running through `npx`,
+  then invoke setup from npm's resolved global package directory instead of
+  relying on a newly refreshed shell `PATH`.
+
+### Safety
+
+- Keep installation explicit; the npm package still has no `install` or
+  `postinstall` lifecycle hook.
+- Stop before setup when the global package installation fails and provide a
+  direct recovery command when global resolution or setup cannot finish.
+
 ## 0.5.6 — 2026-08-02
 
 ### Fixed
