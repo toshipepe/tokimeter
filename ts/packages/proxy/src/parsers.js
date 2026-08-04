@@ -267,8 +267,9 @@ export function readCodexTokenEvents(filePath, { sinceMs = 0 } = {}) {
 /**
  * Read the vendor rate-limit snapshots Codex embeds in token_count events.
  * Each snapshot carries used_percent / window_minutes / resets_at (epoch
- * seconds) for a primary (~5h) and secondary (~7d) window. Returns snapshots
- * in file order; callers usually want the last one (most recent).
+ * seconds) in primary / secondary slots. The slot does not identify the
+ * duration, so callers must use window_minutes. Returns snapshots in file
+ * order; callers usually want the last one (most recent).
  */
 export function readCodexRateLimitSnapshots(filePath) {
   let text = '';
@@ -311,6 +312,33 @@ export function readCodexRateLimitSnapshots(filePath) {
   }
 
   return snapshots;
+}
+
+/**
+ * Classify Codex vendor windows by their recorded duration, not by the
+ * primary / secondary slot they happened to occupy. Unknown durations keep a
+ * literal duration-derived label and no typed kind, so callers can display
+ * the evidence without inventing quota semantics.
+ */
+export function classifyCodexRateLimitWindows(snapshot) {
+  const durationLabel = (minutes) => {
+    if (Number.isInteger(minutes) && minutes % 1440 === 0) return `${minutes / 1440}d`;
+    if (Number.isInteger(minutes) && minutes % 60 === 0) return `${minutes / 60}h`;
+    return `${minutes}m`;
+  };
+
+  return [snapshot?.primary, snapshot?.secondary]
+    .filter((window) => window && Number.isFinite(window.windowMinutes) && window.windowMinutes > 0)
+    .map((window) => {
+      if (window.windowMinutes === 300) {
+        return { window, kind: '5h', label: '5h window' };
+      }
+      if (window.windowMinutes === 10080) {
+        return { window, kind: 'weekly', label: 'Weekly' };
+      }
+      return { window, kind: null, label: `${durationLabel(window.windowMinutes)} window` };
+    })
+    .sort((a, b) => a.window.windowMinutes - b.window.windowMinutes);
 }
 
 // List recent Codex rollout .jsonl files under a sessions dir, newest first.

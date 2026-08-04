@@ -8,6 +8,7 @@ import {
   readClaudeUsageEvents,
   readCodexTokenEvents,
   readCodexRateLimitSnapshots,
+  readCopilotOtelEvents,
   readAiderHistoryEvents,
   readGrokUsageEvents,
   readGrokSessionMeta,
@@ -15,6 +16,7 @@ import {
   buildHermesSessionQuery,
   hermesRowsToEvents,
   readClaudeAgentActivity,
+  classifyCodexRateLimitWindows,
   buildDelegationReport,
   buildAgentBreakdown,
   buildOrchestrationReport,
@@ -51,6 +53,7 @@ const CODEX_FIXTURE = join(FIXTURES, 'codex-rollout.jsonl');
 const CLAUDE_EDGE_FIXTURE = join(FIXTURES, 'claude-edge.jsonl');
 const CODEX_EDGE_FIXTURE = join(FIXTURES, 'codex-edge.jsonl');
 const OPENHUMAN_FIXTURE = join(FIXTURES, 'openhuman-costs.jsonl');
+const COPILOT_FIXTURE = join(FIXTURES, 'copilot-rollout.jsonl');
 
 const TMP = mkdtempSync(join(tmpdir(), 'tokimeter-parsers-'));
 function tmpFile(name, contents) {
@@ -217,6 +220,60 @@ test('codex rollout: externalIds are unique per line', () => {
   assert.equal(new Set(ids).size, ids.length);
 });
 
+test('copilot rollout: parses usage spans', () => {
+  const events = readCopilotOtelEvents(COPILOT_FIXTURE);
+
+  assert.equal(events.length, 2);
+
+  const first = events[0];
+
+  assert.equal(first.provider, 'github');
+  assert.equal(first.tool, 'copilot');
+  assert.equal(first.source, 'copilot-otel');
+  assert.equal(first.confidence, 'exact');
+
+  assert.equal(first.model, 'gpt-5.5');
+
+  assert.equal(first.inputTokens, 1200);
+  assert.equal(first.cachedTokens, 300);
+  assert.equal(first.outputTokens, 120);
+  assert.equal(first.reasoningTokens, 40);
+
+  assert.equal(first.sessionId, 'conversation-1');
+});
+
+test('copilot rollout: invoke_agent is shadowed by chat', () => {
+  const events = readCopilotOtelEvents(COPILOT_FIXTURE);
+
+  assert.equal(events.length, 2);
+
+  const ids = events.map(e => e.externalId);
+
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test('copilot rollout: models and sessions are preserved', () => {
+  const events = readCopilotOtelEvents(COPILOT_FIXTURE);
+
+  assert.equal(events[0].model, 'gpt-5.5');
+  assert.equal(events[1].model, 'gpt-5.4-mini');
+
+  assert.equal(events[0].sessionId, 'conversation-1');
+  assert.equal(events[1].sessionId, 'conversation-2');
+});
+
+test('copilot rollout: respects sinceMs', () => {
+  const events = readCopilotOtelEvents(
+    COPILOT_FIXTURE,
+    {
+      sinceMs: Date.parse('2026-07-08T11:01:00.000Z'),
+    },
+  );
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].model, 'gpt-5.4-mini');
+});
+
 test('claude edge fixture: survives nulls, scalars, missing fields, partial writes', () => {
   const events = readClaudeUsageEvents(CLAUDE_EDGE_FIXTURE);
   const ids = events.map(e => e.externalId.replace('claude-transcript:', ''));
@@ -273,6 +330,32 @@ test('codex edge fixture: rate-limit snapshots expose 5h/7d windows', () => {
   assert.equal(last.secondary.windowMinutes, 10080);
   assert.equal(last.secondary.usedPercent, 57);
   assert.equal(last.secondary.resetsAtMs, 1783889187000);
+});
+
+test('codex rate limits: weekly-only primary is classified from duration', () => {
+  const weekly = { usedPercent: 41, windowMinutes: 10080, resetsAtMs: 1783889187000 };
+  assert.deepEqual(classifyCodexRateLimitWindows({ primary: weekly, secondary: null }), [
+    { window: weekly, kind: 'weekly', label: 'Weekly' },
+  ]);
+});
+
+test('codex rate limits: normal and reversed slots are ordered by duration', () => {
+  const fiveHour = { usedPercent: 4, windowMinutes: 300, resetsAtMs: 1783463415000 };
+  const weekly = { usedPercent: 56, windowMinutes: 10080, resetsAtMs: 1783889187000 };
+  const expected = [
+    { window: fiveHour, kind: '5h', label: '5h window' },
+    { window: weekly, kind: 'weekly', label: 'Weekly' },
+  ];
+
+  assert.deepEqual(classifyCodexRateLimitWindows({ primary: fiveHour, secondary: weekly }), expected);
+  assert.deepEqual(classifyCodexRateLimitWindows({ primary: weekly, secondary: fiveHour }), expected);
+});
+
+test('codex rate limits: unfamiliar duration gets a literal label and no invented kind', () => {
+  const unfamiliar = { usedPercent: 12, windowMinutes: 360, resetsAtMs: 1783463415000 };
+  assert.deepEqual(classifyCodexRateLimitWindows({ primary: unfamiliar }), [
+    { window: unfamiliar, kind: null, label: '6h window' },
+  ]);
 });
 
 test('parsers: huge lines, non-UTF8 bytes, and binary junk never crash', () => {

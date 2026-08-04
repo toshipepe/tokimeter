@@ -25,12 +25,12 @@ class ModelPrice:
 # ─── OpenAI ─────────────────────────────────────────────────────────────────
 
 OPENAI_PRICES = [
-    # GPT-5.x (verified against developers.openai.com/api/docs/pricing, 2026-07-08;
-    # GPT-5.6 Sol/Terra/Luna verified 2026-07-11 — short-context standard rates,
-    # explicit cache-write pricing at 1.25x input)
+    # Verified against developers.openai.com/api/docs/pricing, 2026-08-04.
+    # 5.6+ publishes explicit cache-write pricing at 1.25x input. o1-mini is no
+    # longer listed and keeps its last published rate for older usage.
     ModelPrice("openai", "gpt-5.6-sol",       5.00,  30.00, 0.50,  (), 6.25),
-    ModelPrice("openai", "gpt-5.6-terra",     2.50,  15.00, 0.25,  (), 3.125),
-    ModelPrice("openai", "gpt-5.6-luna",      1.00,   6.00, 0.10,  (), 1.25),
+    ModelPrice("openai", "gpt-5.6-terra",     2.00,  12.00, 0.20,  (), 3.125),
+    ModelPrice("openai", "gpt-5.6-luna",      0.20,   1.20, 0.02,  (), 0.25),
     ModelPrice("openai", "gpt-5.5",           5.00,  30.00, 0.50),
     ModelPrice("openai", "gpt-5.4",           2.50,  15.00, 0.25),
     ModelPrice("openai", "gpt-5.4-mini",      0.75,   4.50, 0.075),
@@ -44,9 +44,9 @@ OPENAI_PRICES = [
     ModelPrice("openai", "gpt-4.1-nano",      0.10,  0.40, 0.025),
     ModelPrice("openai", "o1",               15.00,  60.00, 7.50),
     ModelPrice("openai", "o1-mini",           1.10,  4.40, 0.55),
-    ModelPrice("openai", "o3",               10.00,  40.00, 5.00),
+    ModelPrice("openai", "o3",                2.00,  8.00, 0.50),
     ModelPrice("openai", "o3-mini",           1.10,  4.40, 0.55),
-    ModelPrice("openai", "o4-mini",           1.10,  4.40, 0.55),
+    ModelPrice("openai", "o4-mini",           1.10,  4.40, 0.275),
     ModelPrice("openai", "gpt-4-turbo",      10.00,  30.00),
     ModelPrice("openai", "gpt-3.5-turbo",     0.50,  1.50),
 ]
@@ -54,7 +54,7 @@ OPENAI_PRICES = [
 # ─── Anthropic ──────────────────────────────────────────────────────────────
 
 ANTHROPIC_PRICES = [
-    # Verified against Anthropic pricing/model docs, 2026-07-30.
+    # Verified against platform.claude.com pricing, 2026-08-04.
     # cached = cache-read (~0.1x input); cache_write = 5-min-TTL cache-write (~1.25x input).
     ModelPrice("anthropic", "claude-fable-5",          10.00, 50.00, 1.00,
                ("claude-mythos-5",), 12.50),
@@ -85,50 +85,58 @@ ANTHROPIC_PRICES = [
 
 # ─── Google Gemini ──────────────────────────────────────────────────────────
 
+# Verified against ai.google.dev/gemini-api/docs/pricing, 2026-08-04, at the
+# short-context (<=200k) text tier. Gemini prices audio input and >200k context
+# higher; those tiers are not modeled, so such usage is under-valued rather
+# than guessed.
 GOOGLE_PRICES = [
-    # Gemini 2.5 series
-    ModelPrice("google", "gemini-2.5-pro",          1.25,  10.00, 0.3125,
+    ModelPrice("google", "gemini-3.6-flash",        1.50,  7.50,  0.15),
+    ModelPrice("google", "gemini-3.5-flash",        1.50,  9.00,  0.15,
+               ("gemini-3-flash",)),
+    ModelPrice("google", "gemini-3.5-flash-lite",   0.30,  2.50,  0.03,
+               ("gemini-3-flash-lite",)),
+    ModelPrice("google", "gemini-3.1-flash-lite",   0.25,  1.50,  0.025),
+    ModelPrice("google", "gemini-3.1-pro-preview",  2.00,  12.00, 0.20,
+               ("gemini-3-pro", "gemini-3.5-pro")),
+    ModelPrice("google", "gemini-2.5-pro",          1.25,  10.00, 0.125,
                ("gemini-2.5-pro-preview",)),
-    ModelPrice("google", "gemini-2.5-flash",        0.075, 0.30, 0.01875,
+    ModelPrice("google", "gemini-2.5-flash",        0.30,  2.50,  0.03,
                ("gemini-2.5-flash-preview",)),
-    # Gemini 3.x series (via Velros / Vertex)
-    ModelPrice("google", "gemini-3-pro",            2.50,  15.00, 0.625,
-               ("gemini-3.1-pro-preview", "gemini-3.5-pro")),
-    ModelPrice("google", "gemini-3-flash",          0.15,   0.60, 0.0375,
-               ("gemini-3.5-flash",)),
-    ModelPrice("google", "gemini-3-flash-lite",     0.075,  0.30, 0.01875),
-    # Older
-    ModelPrice("google", "gemini-1.5-pro",          1.25,   5.00, 0.3125),
-    ModelPrice("google", "gemini-1.5-flash",        0.075,  0.30, 0.01875),
-    ModelPrice("google", "gemini-1.5-flash-8b",     0.0375, 0.15),
+    ModelPrice("google", "gemini-2.5-flash-lite",   0.10,  0.40,  0.01),
 ]
 
 # ─── Mistral ────────────────────────────────────────────────────────────────
 
+# Verified against mistral.ai/pricing/api, 2026-08-04. The floating -latest
+# aliases resolve to the current generation. Cache read is a 90% discount.
 MISTRAL_PRICES = [
-    ModelPrice("mistral", "mistral-large-latest",   2.00, 6.00),
-    ModelPrice("mistral", "mistral-medium-latest",  0.40, 4.00),
-    ModelPrice("mistral", "mistral-small-latest",   0.20, 0.60),
-    ModelPrice("mistral", "codestral",              0.30, 0.90),
+    ModelPrice("mistral", "mistral-large-3",        0.50, 1.50, 0.05,
+               ("mistral-large-latest",)),
+    ModelPrice("mistral", "mistral-medium-3.5",     1.50, 7.50, 0.15,
+               ("mistral-medium-latest",)),
+    ModelPrice("mistral", "mistral-small-4",        0.15, 0.60, 0.015,
+               ("mistral-small-latest",)),
+    ModelPrice("mistral", "ministral-3-3b",         0.10, 0.10, 0.01),
+    ModelPrice("mistral", "ministral-3-8b",         0.15, 0.15, 0.015),
+    ModelPrice("mistral", "ministral-3-14b",        0.20, 0.20, 0.02),
     ModelPrice("mistral", "mistral-embed",          0.12, 0.0),
 ]
 
 # ─── Meta Llama (via Together / Groq / Replicate) ──────────────────────────
 
-LLAMA_PRICES = [
-    ModelPrice("meta", "llama-4-scout",    0.20, 0.60),
-    ModelPrice("meta", "llama-4-maverick", 0.27, 0.85),
-    ModelPrice("meta", "llama-3.3-70b",    0.59, 0.79),
-    ModelPrice("meta", "llama-3.1-405b",   2.70, 2.70),
-    ModelPrice("meta", "llama-3.1-70b",    0.59, 0.79),
-    ModelPrice("meta", "llama-3.1-8b",     0.05, 0.08),
-]
+# Intentionally empty. Meta publishes no generally available first-party API
+# pricing; its direct Llama API remains waitlisted. Llama rates come from
+# third-party hosts that differ from each other and change over time, so no
+# single rate can be sourced. Llama usage stays outside priced totals as an
+# unknown model, the same treatment every other unsourced model gets.
+LLAMA_PRICES = []
 
 # ─── xAI Grok ───────────────────────────────────────────────────────────────
 
 XAI_PRICES = [
-    # grok-4.5: docs.x.ai flagship (verified 2026-07-11); no cached price published.
-    ModelPrice("xai", "grok-4.5",          2.00,  6.00, 0.0, ("grok-4.5-latest",)),
+    # Verified against docs.x.ai models pricing, 2026-08-04, at the <200k tier.
+    # Models below grok-4.5 are no longer listed and keep last published rates.
+    ModelPrice("xai", "grok-4.5",          2.00,  6.00, 0.30, ("grok-4.5-latest",)),
     ModelPrice("xai", "grok-4",            5.00, 15.00),
     ModelPrice("xai", "grok-4-fast",       0.20, 0.50),
     ModelPrice("xai", "grok-3",            3.00, 15.00),
@@ -138,10 +146,12 @@ XAI_PRICES = [
 
 # ─── DeepSeek ───────────────────────────────────────────────────────────────
 
+# Verified against api-docs.deepseek.com/quick_start/pricing, 2026-08-04.
+# Announced peak-hour pricing at 2x standard rates has no effective date yet
+# and is not modeled, so peak usage is under-valued rather than guessed.
 DEEPSEEK_PRICES = [
-    ModelPrice("deepseek", "deepseek-v3",          0.27, 1.10, 0.014),
-    ModelPrice("deepseek", "deepseek-r1",          0.55, 2.19),
-    ModelPrice("deepseek", "deepseek-coder",       0.14, 0.28),
+    ModelPrice("deepseek", "deepseek-v4-flash",    0.14,  0.28, 0.0028),
+    ModelPrice("deepseek", "deepseek-v4-pro",      0.435, 0.87, 0.003625),
 ]
 
 # ─── Cohere ─────────────────────────────────────────────────────────────────

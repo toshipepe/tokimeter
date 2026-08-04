@@ -53,3 +53,6 @@ jobs:
         run: |
           npm run build
           npm test
+      - name: Check the published price table is current and sourced
+        working-directory: .
+        run: node scripts/generate-pricing-table.mjs --check

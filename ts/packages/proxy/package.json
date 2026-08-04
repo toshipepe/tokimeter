@@ -1,6 +1,6 @@
 {
   "name": "tokimeter",
-  "version": "0.5.5",
+  "version": "0.5.10",
   "description": "Local-first usage & cost meter for AI coding agents (Claude Code, Codex, Cursor, Grok Build, Hermes, opencode, Cline, Copilot CLI). Inline status-line HUDs, zero-setup reports, 5h-window limits, budgets — no telemetry.",
   "type": "module",
   "main": "src/server.js",
@@ -40,7 +40,7 @@
     "url": "git+https://github.com/toshipepe/tokimeter.git",
     "directory": "ts/packages/proxy"
   },
-  "homepage": "https://github.com/toshipepe/tokimeter",
+  "homepage": "https://tokimeter.com",
   "bugs": {
     "url": "https://github.com/toshipepe/tokimeter/issues"
   },

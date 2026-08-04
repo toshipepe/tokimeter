@@ -5,6 +5,102 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+### Pricing
+
+- Correct Google, Mistral, and DeepSeek rates against each provider's published
+  pricing, verified 2026-08-04. Several were substantially wrong: Gemini 2.5
+  Flash was priced at `$0.075/$0.30` against a published `$0.30/$2.50`, and
+  Gemini 3 Flash at `$0.15/$0.60` against `$1.50/$9.00`.
+- Price Mistral's floating `-latest` aliases against the generation they
+  actually resolve to, and record Mistral's published cache-read discount
+  instead of treating cache reads as unpriced.
+- Replace the delisted DeepSeek models with the currently published ones.
+- Stop shipping a built-in price for Meta Llama models. Meta publishes no
+  generally available first-party API pricing, so Llama usage is now treated as
+  an unknown model and excluded from priced totals rather than valued at a rate
+  that cannot be sourced. Set a custom price for the host you actually use.
+- Drop downgrade suggestions that pointed at models which are no longer priced,
+  so a savings figure can never be computed against an unpriced target.
+- Publish every rate with its source and verification date in `docs/PRICES.md`,
+  generated from the same table the CLI prices with, and fail CI when a
+  provider's verification goes stale or a dated rate change comes due.
+
+## 0.5.10 — 2026-08-03
+
+### Fixed
+
+- Keep `setup --auto` from failing when the shell configuration file cannot be
+  written. NixOS and Home Manager users have a read-only `.bashrc` or `.zshrc`
+  linked into the Nix store, which previously crashed setup with `EACCES` after
+  the shims had already been created.
+- Leave a Nix/Home Manager-managed shell file untouched instead of appending to
+  it, and print the declarative `home.sessionPath` option alongside the manual
+  `export PATH` line.
+- Report the affected file and error code as a warning, and keep the created
+  shims, so setup still finishes successfully.
+- Distinguish three PATH states in setup verification, `doctor`, and `ready`:
+  active in the current shell, configured in a shell file, or needing manual or
+  declarative setup.
+- Stop `uninstall` from failing when a shell configuration file cannot be read
+  or written.
+
+## 0.5.9 — 2026-08-03
+
+### Changed
+
+- Point the npm package homepage to `https://tokimeter.com` while keeping the
+  source repository and issue tracker linked to GitHub.
+
+## 0.5.8 — 2026-08-02
+
+### Fixed
+
+- Classify Codex vendor-reported rate-limit windows by their recorded duration
+  instead of assuming the primary slot is five hours and the secondary slot is
+  weekly.
+- Label a weekly-only primary window correctly, order reversed five-hour and
+  weekly slots consistently, and display unfamiliar durations literally
+  without inventing quota semantics.
+- Preserve the same duration classification when syncing supported Codex limit
+  snapshots to the optional hosted dashboard.
+
+## 0.5.7 — 2026-08-02
+
+### Added
+
+- Add `npx tokimeter install` as the single public command for installing the
+  stable global runtime, configuring supported local integrations, and
+  verifying setup.
+- Add `npx tokimeter install --dry-run` to preview the package and setup actions
+  without changing packages, files, processes, or settings.
+- Pin installation to the same package version already running through `npx`,
+  then invoke setup from npm's resolved global package directory instead of
+  relying on a newly refreshed shell `PATH`.
+
+### Safety
+
+- Keep installation explicit; the npm package still has no `install` or
+  `postinstall` lifecycle hook.
+- Stop before setup when the global package installation fails and provide a
+  direct recovery command when global resolution or setup cannot finish.
+
+## 0.5.6 — 2026-08-02
+
+### Fixed
+
+- Make generated Tokimeter, `tm`, Codex, and Claude launchers follow the
+  currently active global Tokimeter installation instead of pinning the Node
+  version that was active during setup.
+- Detect legacy Node-version-pinned launchers in `tokimeter doctor` and show an
+  actionable repair message instead of a `MODULE_NOT_FOUND` stack trace when
+  an old Node installation has been removed.
+
+### Pricing
+
+- Add Anthropic's published Claude Opus 5 API price.
+- Recognize `codex-auto-review` as an internal, intentionally unpriced model
+  identifier rather than applying an unsupported public-model price.
+
 ## 0.5.5 — 2026-07-31
 
 ### Fixed

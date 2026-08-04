@@ -255,3 +255,88 @@ test('report JSON discovers OpenHuman active-user costs and preserves cost prove
   assert.deepEqual(report.byProvider.map((row) => row.name).sort(), ['OpenAI', 'openhuman']);
   assert.doesNotMatch(output, new RegExp(userId));
 });
+
+test('corrected 2026-08-04 rates match published pricing, aliases included', async () => {
+  const { getPrice } = await import(pathToFileURL(PRICING).href);
+
+  // Google, short-context tier per ai.google.dev, verified 2026-08-04.
+  assert.deepEqual(
+    [getPrice('gemini-2.5-flash').input, getPrice('gemini-2.5-flash').output],
+    [0.30, 2.50],
+  );
+  assert.deepEqual(
+    [getPrice('gemini-3.5-flash').input, getPrice('gemini-3.5-flash').output],
+    [1.50, 9.00],
+  );
+  assert.equal(getPrice('gemini-2.5-pro').cached, 0.125);
+  // The pre-correction names stay resolvable as aliases.
+  assert.equal(getPrice('gemini-3-flash').model, 'gemini-3.5-flash');
+  assert.equal(getPrice('gemini-3-pro').model, 'gemini-3.1-pro-preview');
+
+  // Mistral, per mistral.ai/pricing/api, verified 2026-08-04. The floating
+  // -latest aliases must resolve to the generation they actually point at.
+  assert.equal(getPrice('mistral-large-latest').model, 'mistral-large-3');
+  assert.deepEqual(
+    [getPrice('mistral-large-latest').input, getPrice('mistral-large-latest').output],
+    [0.50, 1.50],
+  );
+  assert.equal(getPrice('mistral-medium-latest').input, 1.50);
+  // Cache read is Mistral's published 90% discount, not zero.
+  assert.equal(getPrice('mistral-small-4').cached, 0.015);
+
+  // DeepSeek, per api-docs.deepseek.com, verified 2026-08-04.
+  assert.deepEqual(
+    [getPrice('deepseek-v4-pro').input, getPrice('deepseek-v4-pro').output],
+    [0.435, 0.87],
+  );
+});
+
+test('models without a sourceable published rate stay unpriced', async () => {
+  const { getPrice, PRICES } = await import(pathToFileURL(PRICING).href);
+
+  // Meta publishes no first-party API pricing, so Llama must not carry an
+  // invented built-in rate. Unknown beats guessed.
+  assert.equal(PRICES.some((price) => price.provider === 'meta'), false);
+  for (const model of ['llama-4-maverick', 'llama-3.1-405b']) {
+    assert.equal(getPrice(model), null, `${model} must not resolve to a built-in price`);
+  }
+
+  // Models delisted from their provider's pricing page go with them, rather
+  // than lingering at a rate that can no longer be verified.
+  for (const model of ['deepseek-v3', 'deepseek-r1', 'gemini-1.5-flash', 'codestral']) {
+    assert.equal(getPrice(model), null, `${model} must not resolve to a built-in price`);
+  }
+});
+
+test('every downgrade suggestion points at a model that is actually priced', async () => {
+  const { DOWNGRADES, getPrice } = await import(pathToFileURL(PRICING).href);
+
+  for (const [from, options] of Object.entries(DOWNGRADES)) {
+    assert.ok(getPrice(from), `downgrade source ${from} is not priced`);
+    for (const option of options) {
+      assert.ok(getPrice(option.model), `${from} suggests unpriced ${option.model}`);
+    }
+  }
+});
+
+test('re-verified 2026-08-04 rates match published pricing', async () => {
+  const { getPrice } = await import(pathToFileURL(PRICING).href);
+
+  // OpenAI, per developers.openai.com. These four were wrong before the
+  // 2026-08-04 re-verification; o3 and gpt-5.6-luna by roughly 5x.
+  assert.deepEqual([getPrice('o3').input, getPrice('o3').output], [2.00, 8.00]);
+  assert.equal(getPrice('o3').cached, 0.50);
+  assert.deepEqual([getPrice('gpt-5.6-luna').input, getPrice('gpt-5.6-luna').output], [0.20, 1.20]);
+  assert.deepEqual([getPrice('gpt-5.6-terra').input, getPrice('gpt-5.6-terra').output], [2.00, 12.00]);
+  assert.equal(getPrice('o4-mini').cached, 0.275);
+
+  // xAI publishes cache-read rates; they were previously recorded as unpriced.
+  assert.equal(getPrice('grok-4.5').cached, 0.30);
+  assert.equal(getPrice('grok-4.3').cached, 0.20);
+  assert.equal(getPrice('grok-build').cached, 0.20);
+
+  // Anthropic re-verified with no change, including the introductory rate
+  // still in effect through 2026-08-31.
+  assert.deepEqual([getPrice('claude-sonnet-5').input, getPrice('claude-sonnet-5').output], [2.00, 10.00]);
+  assert.equal(getPrice('claude-opus-5').cacheWrite, 6.25);
+});
