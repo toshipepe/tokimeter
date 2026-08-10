@@ -5,6 +5,8 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+## 0.6.0 — 2026-08-10
+
 ### Added
 
 - Add an experimental, test-covered `/venice` localhost proxy route for using
