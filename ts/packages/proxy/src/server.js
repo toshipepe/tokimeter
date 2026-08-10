@@ -24,6 +24,14 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from '
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import {
+  buildUpstreamPath,
+  extractOpenAICompatibleUsage,
+  extractProviderRequestId,
+  isOpenAICompatibleProvider,
+  pricingModelKey,
+  resolveVeniceUpstream,
+} from './provider-protocol.js';
 
 const { CostTracker } = await importCore();
 const { getPricingSource, listModels, priceCall } = await importCorePricing();
@@ -109,7 +117,6 @@ async function importCorePricing() {
  */
 function resolveUpstream(reqUrl, headers) {
   const path = reqUrl.path || reqUrl.pathname;
-  const host = (headers.host || '').toLowerCase();
 
   // ─── Anthropic (Claude Code, Claude API) ────────────────────────────────
   // ANTHROPIC_BASE_URL=http://localhost:8788
@@ -134,6 +141,13 @@ function resolveUpstream(reqUrl, headers) {
       apiBase: u.pathname.replace(/\/$/, ''),
     };
   }
+
+  // ─── Venice (OpenAI-compatible Responses and Chat Completions) ────────
+  // Configure clients with the exact local base URL below (no extra /v1):
+  //   http://localhost:8788/venice
+  // /venice/responses becomes https://api.venice.ai/api/v1/responses.
+  const veniceUpstream = resolveVeniceUpstream(path);
+  if (veniceUpstream) return veniceUpstream;
 
   // ─── OpenRouter (any OpenAI-compatible CLI) ────────────────────────────
   // Point the tool at http://localhost:8788/openrouter, e.g.:
@@ -190,7 +204,7 @@ function resolveUpstream(reqUrl, headers) {
 
 /**
  * Extract token usage from an API response body.
- * Handles OpenAI, Anthropic, and Google response formats.
+ * Handles OpenAI-compatible, Anthropic, and Google response formats.
  */
 function extractUsage(provider, body) {
   try {
@@ -213,21 +227,7 @@ function extractUsageFromObject(provider, data) {
     };
   }
 
-  if (provider === 'openai') {
-    const response = data.response || data;
-    const usage = response.usage || {};
-    const cached = usage.prompt_tokens_details?.cached_tokens ||
-      usage.input_tokens_details?.cached_tokens || 0;
-    // Responses API uses input/output tokens; Chat Completions uses prompt/completion.
-    const inputT = usage.prompt_tokens || usage.input_tokens || 0;
-    const outputT = usage.completion_tokens || usage.output_tokens || 0;
-    return {
-      inputTokens: inputT,
-      outputTokens: outputT,
-      cachedTokens: cached,
-      model: response.model || data.model || '',
-    };
-  }
+  if (isOpenAICompatibleProvider(provider)) return extractOpenAICompatibleUsage(data);
 
   if (provider === 'google') {
     const usage = data.usageMetadata || {};
@@ -243,7 +243,13 @@ function extractUsageFromObject(provider, data) {
 }
 
 function extractUsageFromStream(provider, body) {
-  const usage = { inputTokens: 0, outputTokens: 0, cachedTokens: 0, cacheCreationTokens: 0, model: '' };
+  const usage = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedTokens: 0,
+    cacheCreationTokens: 0,
+    model: '',
+  };
   const lines = body.split(/\r?\n/);
 
   for (const line of lines) {
@@ -283,7 +289,7 @@ function extractUsageFromStreamEvent(provider, data) {
     }
   }
 
-  if (provider === 'openai') {
+  if (isOpenAICompatibleProvider(provider)) {
     if (data.type === 'response.completed' && data.response) {
       return extractUsageFromObject(provider, data.response);
     }
@@ -482,10 +488,7 @@ function handleProxy(req, res) {
     const reqBody = Buffer.concat(bodyChunks);
 
     // Build upstream request
-    const forwardedPathname = upstream.stripPrefix && reqUrl.pathname.startsWith(upstream.stripPrefix)
-      ? reqUrl.pathname.slice(upstream.stripPrefix.length)
-      : reqUrl.pathname;
-    const upstreamPath = upstream.apiBase + forwardedPathname + reqUrl.search;
+    const upstreamPath = buildUpstreamPath(upstream, reqUrl.pathname, reqUrl.search);
 
     const upstreamHeaders = { ...req.headers };
     // Fix host header
@@ -528,8 +531,9 @@ function handleProxy(req, res) {
           } catch {}
         }
 
+        const pricingModel = pricingModelKey(upstream.provider, model);
         const cost = priceCall(
-          model,
+          pricingModel,
           usage.inputTokens,
           usage.outputTokens,
           usage.cachedTokens,
@@ -553,7 +557,8 @@ function handleProxy(req, res) {
           success,
           tool: detectTool(req.headers),
           confidence: 'exact',
-          pricingConfidence: getPricingSource(model).confidence,
+          pricingConfidence: getPricingSource(pricingModel).confidence,
+          providerRequestId: extractProviderRequestId(upstream.provider, proxyRes.headers) || undefined,
         };
 
         recordCall(call);

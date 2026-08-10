@@ -6354,6 +6354,7 @@ function providerDisplayName(value) {
   if (provider === 'openai') return 'OpenAI';
   if (provider === 'anthropic') return 'Anthropic';
   if (provider === 'google') return 'Google';
+  if (provider === 'venice') return 'Venice';
   return provider;
 }
 

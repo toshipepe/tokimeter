@@ -5,6 +5,13 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+### Added
+
+- Add an experimental, test-covered `/venice` localhost proxy route for using
+  Venice's OpenAI-compatible Responses API through Codex. Tokimeter records
+  token metadata and the `CF-RAY` support request ID locally, never syncs the
+  request ID, and keeps Venice rates provider-scoped and unpriced by default.
+
 ## 0.5.11 — 2026-08-04
 
 ### Added

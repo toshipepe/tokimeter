@@ -10,7 +10,7 @@ lives, and what never leaves your machine.
 | Zero-setup readers | Usage fields in `~/.claude/projects/*.jsonl`, `~/.codex/sessions/*.jsonl`, `~/.grok/logs/`, `~/.hermes/state.db`, the active OpenHuman workspace's `state/costs.jsonl`, opencode/Cline local histories, Cursor capture/CSV records, an enabled Copilot OTel export, or an explicitly selected Aider history | Nothing outside `~/.tokimeter`; a report printed to stdout writes only where the user redirects it | Token buckets, model/provider/tool, timestamp, numeric cost, latency/success, confidence/effort, hashed session id, and the privacy-selected project label | Prompts, responses, code, diffs, commands, repository contents, raw session ids, full paths by default, account/provider credentials; OpenHuman Memory Trees, wiki pages, run journals, transcripts, OAuth state, credentials, and account id |
 | Local state | `~/.tokimeter/calls.jsonl`, settings, cached pricing, queues, and generated helper metadata | The same `~/.tokimeter/` directory | Only the event allowlist above; queue/health internals and custom pricing files do not sync | API keys, local settings unrelated to event metadata, pricing files, shell config, backups |
 | `tokimeter setup` | Existing Codex/Claude/Cursor config fields and shell PATH block, only to plan or preserve them | Generated files under `~/.tokimeter/`; Tokimeter Codex profiles; additive Claude/Cursor/Grok config; one marked shell PATH block with `--auto` | Nothing merely because setup ran | Existing config backups, shell contents, tool credentials |
-| Local proxy (opt-in, experimental) | Provider request/response traffic needed to forward the call and read usage | Usage metadata in `~/.tokimeter/calls.jsonl`; request/response content is not logged | The same event metadata allowlist when Pro is explicitly connected | Authorization headers/API keys, prompt and response bodies |
+| Local proxy (opt-in, experimental) | Provider request/response traffic needed to forward the call and read usage | Usage metadata and provider request ID in `~/.tokimeter/calls.jsonl`; request/response content is not logged | The same event metadata allowlist when Pro is explicitly connected | Authorization headers/API keys, prompt and response bodies, provider request ID |
 | VS Code activity hint (optional) | Transient terminal output chunks for spinner/activity markers | Nothing; chunks are not buffered | Nothing | Terminal output |
 
 `tokimeter report` and `tokimeter limits` use only the read-only paths — no
@@ -34,7 +34,7 @@ proxy, no shims, no writes outside `~/.tokimeter`.
 - `tokimeter pricing refresh` (manual command) fetches a public model-price
   table over HTTPS and caches it locally.
 - The optional proxy forwards your API traffic directly to the provider you
-  configured (`api.openai.com`, `api.anthropic.com`, ...). It binds to
+  configured (`api.openai.com`, `api.anthropic.com`, `api.venice.ai`, ...). It binds to
   `localhost` only and adds no third-party hops. Its paid-route accounting is
   experimental/test-covered, not yet reconciled against provider invoices.
 - Cloud sync exists only if you explicitly set `TOKIMETER_CLOUD_URL` and
@@ -43,8 +43,9 @@ proxy, no shims, no writes outside `~/.tokimeter`.
 
 ## API keys
 
-- Tokimeter never logs, stores, or transmits your API keys. The proxy passes
-  your `Authorization`/`x-api-key` headers through to the provider unchanged.
+- Tokimeter never logs or stores your API keys, and sends them only to the
+  provider you configured. The proxy passes your `Authorization`/`x-api-key`
+  headers through to that provider unchanged.
 - Subscription-mode tracking (Claude Pro/Max, ChatGPT/Codex) involves no keys
   at all — it reads local files the vendor tools already write.
 

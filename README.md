@@ -206,7 +206,7 @@ the report only observes.
 | opencode | Live verified with 1.17.18 | Local message files/database; no setup for reports | Recorded token counts and request-time cost when present; otherwise priced `~` estimates. |
 | Cline | Live verified with CLI 3.0.39 + Codex OAuth | Local task/session history; no setup for reports | Numeric usage and Cline's request-time cost when present. Prompt and response content are ignored. |
 | Copilot CLI / Aider | Fixture tested | Copilot file exporter or Aider history import/proxy | Parser, deduplication, accounting, and privacy behavior pass fixtures; not claimed as live-verified in this release. |
-| Anthropic/OpenAI proxy routes | Experimental and test-covered; not sent to paid APIs in this audit | Optional localhost proxy | Designed for billed API-key usage, but not invoice-reconciled. Verify against provider billing before treating it as billed-exact. |
+| Anthropic/OpenAI/Venice proxy routes | Experimental and test-covered; not sent to paid APIs in this audit | Optional localhost proxy | Designed for billed API-key usage, but not invoice-reconciled. Venice rates remain provider-scoped and unpriced by default. |
 
 “Fixture tested” means the local parser, deduplication, token accounting, and
 privacy behavior pass against representative records, but this release was not
@@ -286,6 +286,35 @@ resolve automatically):
 export OPENAI_BASE_URL=http://localhost:8788/openrouter/v1
 export OPENAI_API_KEY=$OPENROUTER_API_KEY
 ```
+
+**Venice (experimental, test-covered)**: start the local proxy with
+`tokimeter start`, export your key as `VENICE_API_KEY`, and put this provider
+definition in your user-level `~/.codex/config.toml`:
+
+```toml
+model = "replace-with-current-venice-model-id"
+model_provider = "tokimeter-venice"
+
+[model_providers.tokimeter-venice]
+name = "Venice via Tokimeter"
+base_url = "http://localhost:8788/venice"
+env_key = "VENICE_API_KEY"
+wire_api = "responses"
+```
+
+Use the exact local base above; do not append `/v1`. Current Codex security
+rules ignore provider selection and provider authentication in project
+`.codex/config.toml`, so this belongs in the user-level file. The config stores
+only the environment-variable name, not the key. See the official
+[Codex advanced configuration](https://learn.chatgpt.com/docs/config-file/config-advanced)
+and [Venice Codex guide](https://docs.venice.ai/guides/integrations/codex-cli).
+
+Tokimeter forwards the call to `api.venice.ai`, records usage metadata and the
+`CF-RAY` provider request ID locally, and does not persist prompt or response
+content. The provider request ID is excluded from optional Pro sync. Venice
+rates are provider-specific, so they remain unpriced unless you add a custom
+price under `venice:<model-id>`; no paid Venice request or invoice
+reconciliation is claimed by this release.
 
 **Aider (fixture-tested; live verification intentionally skipped)**:
 `tokimeter aider [args]` wraps aider with
