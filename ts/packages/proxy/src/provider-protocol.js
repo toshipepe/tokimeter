@@ -31,14 +31,26 @@ export function extractOpenAICompatibleUsage(data) {
   const usage = response.usage || {};
   const cachedTokens = usage.prompt_tokens_details?.cached_tokens ||
     usage.input_tokens_details?.cached_tokens || 0;
+  const cacheCreationTokens = usage.prompt_tokens_details?.cache_creation_input_tokens ||
+    usage.input_tokens_details?.cache_creation_input_tokens ||
+    usage.cache_write_tokens || usage.input_tokens_details?.cache_write_tokens || 0;
 
   return {
     inputTokens: usage.prompt_tokens || usage.input_tokens || 0,
     outputTokens: usage.completion_tokens || usage.output_tokens || 0,
     cachedTokens,
-    cacheCreationTokens: usage.cache_write_tokens ||
-      usage.input_tokens_details?.cache_write_tokens || 0,
+    cacheCreationTokens,
     model: response.model || data?.model || '',
-    requestId: response.id || data?.id || '',
   };
+}
+
+export function extractProviderRequestId(provider, headers = {}) {
+  if (provider !== 'venice') return '';
+  const value = headers['cf-ray'];
+  return Array.isArray(value) ? String(value[0] || '') : String(value || '');
+}
+
+export function pricingModelKey(provider, model) {
+  const value = String(model || '');
+  return provider === 'venice' ? `venice:${value}` : value;
 }

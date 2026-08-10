@@ -27,13 +27,15 @@ import { spawn } from 'node:child_process';
 import {
   buildUpstreamPath,
   extractOpenAICompatibleUsage,
+  extractProviderRequestId,
   isOpenAICompatibleProvider,
+  pricingModelKey,
   resolveVeniceUpstream,
 } from './provider-protocol.js';
 
 const { CostTracker } = await importCore();
 const { getPricingSource, listModels, priceCall } = await importCorePricing();
-const { latestCodexVendorSnapshot } = await import('./parsers.js');
+const { classifyCodexRateLimitWindows, latestCodexVendorSnapshot } = await import('./parsers.js');
 const {
   clearCloudPause,
   cloudPauseActive,
@@ -247,7 +249,6 @@ function extractUsageFromStream(provider, body) {
     cachedTokens: 0,
     cacheCreationTokens: 0,
     model: '',
-    requestId: '',
   };
   const lines = body.split(/\r?\n/);
 
@@ -264,7 +265,6 @@ function extractUsageFromStream(provider, body) {
       usage.cachedTokens = Math.max(usage.cachedTokens, next.cachedTokens || 0);
       usage.cacheCreationTokens = Math.max(usage.cacheCreationTokens, next.cacheCreationTokens || 0);
       if (!usage.model && next.model) usage.model = next.model;
-      if (!usage.requestId && next.requestId) usage.requestId = next.requestId;
     } catch {
       // Ignore malformed stream lines.
     }
@@ -531,8 +531,9 @@ function handleProxy(req, res) {
           } catch {}
         }
 
+        const pricingModel = pricingModelKey(upstream.provider, model);
         const cost = priceCall(
-          model,
+          pricingModel,
           usage.inputTokens,
           usage.outputTokens,
           usage.cachedTokens,
@@ -556,8 +557,8 @@ function handleProxy(req, res) {
           success,
           tool: detectTool(req.headers),
           confidence: 'exact',
-          pricingConfidence: getPricingSource(model).confidence,
-          providerRequestId: usage.requestId || undefined,
+          pricingConfidence: getPricingSource(pricingModel).confidence,
+          providerRequestId: extractProviderRequestId(upstream.provider, proxyRes.headers) || undefined,
         };
 
         recordCall(call);
@@ -857,8 +858,8 @@ function syncLimitSnapshots() {
   }
   if (!snap) return;
   const capturedAt = new Date(snap.timestamp).toISOString();
-  const send = (window, kind) => {
-    if (!window || window.resetsAtMs == null) return;
+  const send = ({ window, kind }) => {
+    if (!kind || window.resetsAtMs == null) return;
     postCloudPayload({
       contract_version: 1,
       tool: 'codex',
@@ -869,8 +870,7 @@ function syncLimitSnapshots() {
       captured_at: capturedAt,
     }, recordCloudResult, 'limits');
   };
-  send(snap.primary, '5h');
-  send(snap.secondary, 'weekly');
+  for (const classified of classifyCodexRateLimitWindows(snap)) send(classified);
 }
 
 function enqueueCloudPayload(payload) {

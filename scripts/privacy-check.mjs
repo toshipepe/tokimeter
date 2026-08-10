@@ -245,14 +245,29 @@ function checkGitHistory() {
   notes.push(`${scanned} reachable Git history objects scanned`);
 }
 
+// The identity rule exists to keep the maintainer's own address out of public
+// history. An outside contributor's commit email is their own choice, made on
+// their own account, so it is not this gate's business. Commits authored under
+// the maintainer's name stay strictly enforced, because that is the case that
+// would otherwise leak a personal address.
+function isMaintainerAuthored(name) {
+  const normalized = name.trim().toLowerCase();
+  return normalized === EXPECTED_NPM_USER.toLowerCase()
+    || normalized === EXPECTED_AUTHOR.name.toLowerCase();
+}
+
 function checkGitIdentity() {
-  const commitEmails = git(['log', '--all', '--format=%ae'])
+  const commits = git(['log', '--all', '--format=%an%x00%ae'])
     .split('\n')
-    .map((email) => email.trim())
-    .filter(Boolean);
-  const rejected = [...new Set(commitEmails.filter((email) => !isAllowedGitEmail(email)))];
+    .map((line) => line.split('\0'))
+    .filter((parts) => parts.length === 2 && parts[1].trim())
+    .map(([name, email]) => ({ name, email: email.trim() }));
+  const commitEmails = commits.map((commit) => commit.email);
+  const rejected = [...new Set(commits
+    .filter((commit) => isMaintainerAuthored(commit.name) && !isAllowedGitEmail(commit.email))
+    .map((commit) => commit.email))];
   if (rejected.length) {
-    failures.push(`${rejected.length} reachable Git commit email(s) are not GitHub noreply or the approved brand address`);
+    failures.push(`${rejected.length} reachable maintainer commit email(s) are not GitHub noreply or the approved brand address`);
   }
 
   const trustedPublisher = mode === '--prepublish' && process.env.ACTIONS_ID_TOKEN_REQUEST_URL;

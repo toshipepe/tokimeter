@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { getPricingSource } from '../packages/core/src/pricing.js';
 
 import {
   buildUpstreamPath,
   extractOpenAICompatibleUsage,
+  extractProviderRequestId,
   isOpenAICompatibleProvider,
+  pricingModelKey,
   resolveVeniceUpstream,
 } from '../packages/proxy/src/provider-protocol.js';
 
@@ -48,7 +51,6 @@ test('Venice reuses OpenAI-compatible Responses API usage without content fields
       output_tokens: 30,
       input_tokens_details: {
         cached_tokens: 20,
-        cache_write_tokens: 10,
       },
     },
   });
@@ -57,9 +59,8 @@ test('Venice reuses OpenAI-compatible Responses API usage without content fields
     inputTokens: 120,
     outputTokens: 30,
     cachedTokens: 20,
-    cacheCreationTokens: 10,
+    cacheCreationTokens: 0,
     model: 'synthetic-code-model',
-    requestId: 'resp_synthetic_001',
   });
   assert.equal(Object.hasOwn(usage, 'input'), false);
   assert.equal(Object.hasOwn(usage, 'output'), false);
@@ -72,16 +73,18 @@ test('Venice chat-completion and wrapped stream-final usage stay compatible', ()
     usage: {
       prompt_tokens: 80,
       completion_tokens: 25,
-      prompt_tokens_details: { cached_tokens: 12 },
+      prompt_tokens_details: {
+        cached_tokens: 12,
+        cache_creation_input_tokens: 7,
+      },
     },
   });
   assert.deepEqual(chat, {
     inputTokens: 80,
     outputTokens: 25,
     cachedTokens: 12,
-    cacheCreationTokens: 0,
+    cacheCreationTokens: 7,
     model: 'synthetic-private-model',
-    requestId: 'chatcmpl_synthetic_001',
   });
 
   const wrapped = extractOpenAICompatibleUsage({
@@ -98,6 +101,21 @@ test('Venice chat-completion and wrapped stream-final usage stay compatible', ()
     cachedTokens: 0,
     cacheCreationTokens: 0,
     model: 'synthetic-reasoning-model',
-    requestId: 'resp_synthetic_002',
   });
+});
+
+test('Venice support request ID comes from CF-RAY, not response content', () => {
+  assert.equal(
+    extractProviderRequestId('venice', { 'cf-ray': 'synthetic-ray-id' }),
+    'synthetic-ray-id',
+  );
+  assert.equal(extractProviderRequestId('venice', {}), '');
+  assert.equal(extractProviderRequestId('openai', { 'cf-ray': 'not-venice' }), '');
+});
+
+test('Venice pricing keys cannot collide with another provider model ID', () => {
+  assert.equal(pricingModelKey('venice', 'synthetic-shared-model'), 'venice:synthetic-shared-model');
+  assert.equal(pricingModelKey('openai', 'synthetic-shared-model'), 'synthetic-shared-model');
+  assert.notEqual(getPricingSource('claude-sonnet-5').confidence, 'fallback');
+  assert.equal(getPricingSource(pricingModelKey('venice', 'claude-sonnet-5')).confidence, 'fallback');
 });

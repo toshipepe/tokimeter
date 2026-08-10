@@ -27,7 +27,7 @@ Runs one private report from the usage metadata already on your machine.
 Reports, budgets, limit warnings, live status-line HUDs, and more:
 
 ```bash
-npm install -g tokimeter && "$(npm prefix -g)/bin/tokimeter" setup --auto
+npx tokimeter install
 ```
 
 ## Why Tokimeter exists
@@ -59,10 +59,24 @@ your device.
 Live-verified readers in this release: Claude Code CLI/Desktop, Codex
 CLI/Desktop, Cursor CLI/Desktop Agent, Grok Build, Hermes, opencode 1.17.18,
 and Cline CLI 3.0.39.
-GitHub Copilot CLI and Aider are fixture-tested but were not completed as live
-requests during release testing. Paid Anthropic/OpenAI/Venice API routes are
-experimental and test-covered but were not exercised against paid APIs or
-reconciled with provider invoices.
+OpenHuman, GitHub Copilot CLI, and Aider are fixture-tested but were not
+completed as live requests during release testing. Paid
+Anthropic/OpenAI/Venice API routes are experimental and test-covered but were
+not exercised against paid APIs or reconciled with provider invoices.
+
+OpenHuman usage is read from only the active workspace's append-only
+`state/costs.jsonl` ledger (`OPENHUMAN_WORKSPACE` is honored). Token buckets
+are exact; provider-charged costs remain reported and OpenHuman estimates stay
+visibly estimated. Tokimeter does not read Memory Trees, wiki pages, run
+journals, transcripts, OAuth state, or credentials, and does not retain the
+local account id used for workspace discovery. Bare managed model aliases stay
+attributed to `openhuman`. Scope the report with `--tool openhuman`.
+
+These are per-request model costs, not what you pay TinyHumans. TinyHumans
+bills in credits through a monthly plan or pay-as-you-go top-ups, and a credit
+has no fixed dollar value across tiers. Tokimeter does not read your credit
+balance, credits consumed, or remaining monthly allowance, and cannot derive
+them from the cost ledger.
 
 Claude Code and Codex coverage includes local coding sessions created from
 their CLI and desktop surfaces. Regular Claude or ChatGPT chats and
@@ -91,20 +105,37 @@ wire_api = "responses"
 
 Do not append `/v1` to the local base. Codex ignores provider and auth settings
 from project `.codex/config.toml`, so keep this definition in the user-level
-file. Tokimeter stores token/model metadata and the provider request ID locally,
-never the API key, prompt, or response. The request ID is excluded from optional
-Pro sync. Unknown Venice models remain outside authoritative priced totals.
+file. Tokimeter stores token/model metadata and the `CF-RAY` provider request ID
+locally, never the API key, prompt, or response. The request ID is excluded from
+optional Pro sync. Venice rates remain unpriced unless you add a custom price
+under `venice:<model-id>`, so another provider's matching model ID cannot leak
+into authoritative totals.
 
 ## Setup details
 
-Run `tokimeter setup --auto --dry-run` to print every planned file/process
-action without changing anything. `tokimeter uninstall` restores prior
-supported-tool settings and removes Tokimeter-generated setup files.
+`npx tokimeter install` installs the same Tokimeter version globally, runs the
+reviewable `setup --auto` flow, and verifies the result. It is an explicit CLI
+command, not an automatic npm lifecycle script. Run
+`npx tokimeter install --dry-run` to preview the install and setup without
+changing anything. For an existing global installation,
+`tokimeter setup --auto --dry-run` previews only the setup actions.
+`tokimeter uninstall` restores prior supported-tool settings and removes
+Tokimeter-generated setup files.
 
 Close and reopen your terminal when setup finishes. Then keep using `codex`,
 `claude`, and your other supported tools normally. Calling the executable by
 its full npm location avoids the common macOS/zsh case where npm's global
 executable directory is not yet on `PATH`; setup configures future terminals.
+
+Generated launchers resolve the active global Tokimeter installation at run
+time rather than saving a Node-version-specific package path. Switching Node
+versions is therefore safe once Tokimeter is installed for the newly active
+Node version. To migrate a launcher written by an older release after a
+`MODULE_NOT_FOUND` error:
+
+```bash
+npx tokimeter install
+```
 
 ## Limits: the 5-hour window
 

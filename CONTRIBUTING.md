@@ -44,9 +44,15 @@ Keep both test suites green. CI runs them on every push.
 Run `npm run privacy:check` from `ts/` before opening a pull request. The same
 gate runs in CI, before local commits and pushes after `privacy:setup`, and
 before npm publishing. It rejects unapproved email addresses, user-directory
-paths, common secrets, private workspace files, unexpected npm tarball files,
-and non-brand Git author identities. Use reserved `example.com`, `example.net`,
-or `example.org` addresses in fixtures and documentation.
+paths, common secrets, private workspace files, and unexpected npm tarball
+files. Use reserved `example.com`, `example.net`, or `example.org` addresses in
+fixtures and documentation.
+
+Your commit email is your own choice. The Git identity rule applies only to
+commits authored under the maintainer's name, so you do not need to change your
+public commit address to contribute. If you would rather keep your address
+private, GitHub's `@users.noreply.github.com` option works and needs nothing
+from us.
 
 ## Style
 

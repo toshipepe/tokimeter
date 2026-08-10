@@ -121,7 +121,7 @@ class CostReport:
         self.pricing_sources[source] = self.pricing_sources.get(source, 0) + 1
         rough = float(call.tags.get("rough_estimate_cost", 0) or 0)
         self.rough_estimate_cost += rough
-        if source == "fallback":
+        if source in ("fallback", "internal"):
             self.unpriced_calls += 1
 
         for dim, attr in [

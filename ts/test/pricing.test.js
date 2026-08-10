@@ -66,6 +66,43 @@ test('pricing provenance distinguishes verified, community, custom, and fallback
     { confidence: 'custom', source: 'custom' },
   );
   assert.equal(pricing.getPricingSource('future-unknown-model').confidence, 'fallback');
+  assert.deepEqual(
+    {
+      confidence: pricing.getPricingSource('codex-auto-review').confidence,
+      source: pricing.getPricingSource('codex-auto-review').source,
+      authoritative: pricing.getPricingSource('codex-auto-review').authoritative,
+    },
+    { confidence: 'fallback', source: 'internal', authoritative: false },
+  );
+});
+
+test('current recorded model prices are sourced without guessing internal aliases', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'tokimeter-current-models-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  process.env.TOKIMETER_PRICING_FILE = join(root, 'missing-custom.json');
+  process.env.TOKIMETER_PRICING_FEED_FILE = join(root, 'missing-feed.json');
+  t.after(() => {
+    delete process.env.TOKIMETER_PRICING_FILE;
+    delete process.env.TOKIMETER_PRICING_FEED_FILE;
+  });
+
+  const nonce = `${Date.now()}-${Math.random()}`;
+  const pricing = await import(`${pathToFileURL(PRICING).href}?test=${nonce}`);
+  const opus = pricing.priceCall('claude-opus-5', 1_000_000, 1_000_000, 500_000, 200_000, {
+    cachedIncludedInInput: false,
+  });
+
+  assert.equal(opus.inputCost, 6.5);
+  assert.equal(opus.outputCost, 25);
+  assert.equal(opus.totalCost, 31.5);
+  assert.equal(opus.pricingSource, 'verified');
+  assert.equal(pricing.getPricingSource('claude-opus-5').source, 'built-in');
+
+  const reviewer = pricing.priceCall('codex-auto-review', 1_000_000, 1_000_000);
+  assert.equal(reviewer.totalCost, 0);
+  assert.equal(reviewer.authoritative, false);
+  assert.equal(reviewer.pricingSource, 'internal');
+  assert.equal(pricing.getPricingSource('codex-auto-review').source, 'internal');
 });
 
 test('unknown fallback stays outside authoritative tracker totals', async (t) => {
@@ -161,4 +198,145 @@ test('report JSON separates known totals from unknown-model rough estimates', (t
   assert.equal(report.totals.unpricedCalls, 1);
   assert.equal(report.pricingSources.find((row) => row.name === 'verified built-in').cost, 1);
   assert.equal(report.pricingSources.find((row) => row.name === 'fallback / unpriced').roughEstimateCost, 10);
+});
+
+test('report JSON discovers OpenHuman active-user costs and preserves cost provenance', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'tokimeter-openhuman-report-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const userId = '50000000-0000-4000-8000-000000000001';
+  const openHumanRoot = join(root, '.openhuman');
+  const stateDir = join(openHumanRoot, 'users', userId, 'workspace', 'state');
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(join(openHumanRoot, 'active_user.toml'), `user_id = "${userId}"\n`);
+  const timestamp = new Date().toISOString();
+  const records = [
+    {
+      id: '60000000-0000-4000-8000-000000000001',
+      usage: {
+        model: 'openai/gpt-5-mini', input_tokens: 100, output_tokens: 20,
+        total_tokens: 120, cached_input_tokens: 50, cache_creation_tokens: 0,
+        reasoning_tokens: 5, cost_usd: 0.01, cost_source: 'provider_charged', timestamp,
+      },
+      session_id: '70000000-0000-4000-8000-000000000001',
+    },
+    {
+      id: '60000000-0000-4000-8000-000000000002',
+      usage: {
+        model: 'chat-v1', input_tokens: 200, output_tokens: 40,
+        total_tokens: 240, cached_input_tokens: 0, cache_creation_tokens: 0,
+        reasoning_tokens: 0, cost_usd: 0.02, cost_source: 'estimated', timestamp,
+      },
+      session_id: '70000000-0000-4000-8000-000000000002',
+    },
+  ];
+  writeFileSync(join(stateDir, 'costs.jsonl'), `${records.map(JSON.stringify).join('\n')}\n`);
+
+  const output = execFileSync(process.execPath, [CLI, 'report', '--days=1', '--tool=openhuman', '--json'], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      HOME: root,
+      CLAUDE_HOME: join(root, '.claude'),
+      CODEX_HOME: join(root, '.codex'),
+      CURSOR_HOME: join(root, '.cursor'),
+      GROK_HOME: join(root, '.grok'),
+      HERMES_HOME: join(root, '.hermes'),
+      TOKIMETER_DATA_DIR: join(root, '.tokimeter'),
+      TOKIMETER_PRICING_FILE: join(root, '.tokimeter', 'pricing.json'),
+      TOKIMETER_PRICING_FEED_FILE: join(root, '.tokimeter', 'pricing-feed.json'),
+    },
+  });
+  const report = JSON.parse(output);
+  assert.equal(report.totals.calls, 2);
+  assert.equal(report.totals.cost, 0.03);
+  assert.equal(report.byTool[0].name, 'openhuman');
+  assert.equal(report.pricingSources.find((row) => row.name === 'provider/tool reported').cost, 0.01);
+  assert.equal(report.pricingSources.find((row) => row.name === 'tool estimated').cost, 0.02);
+  assert.deepEqual(report.byProvider.map((row) => row.name).sort(), ['OpenAI', 'openhuman']);
+  assert.doesNotMatch(output, new RegExp(userId));
+});
+
+test('corrected 2026-08-04 rates match published pricing, aliases included', async () => {
+  const { getPrice } = await import(pathToFileURL(PRICING).href);
+
+  // Google, short-context tier per ai.google.dev, verified 2026-08-04.
+  assert.deepEqual(
+    [getPrice('gemini-2.5-flash').input, getPrice('gemini-2.5-flash').output],
+    [0.30, 2.50],
+  );
+  assert.deepEqual(
+    [getPrice('gemini-3.5-flash').input, getPrice('gemini-3.5-flash').output],
+    [1.50, 9.00],
+  );
+  assert.equal(getPrice('gemini-2.5-pro').cached, 0.125);
+  // The pre-correction names stay resolvable as aliases.
+  assert.equal(getPrice('gemini-3-flash').model, 'gemini-3.5-flash');
+  assert.equal(getPrice('gemini-3-pro').model, 'gemini-3.1-pro-preview');
+
+  // Mistral, per mistral.ai/pricing/api, verified 2026-08-04. The floating
+  // -latest aliases must resolve to the generation they actually point at.
+  assert.equal(getPrice('mistral-large-latest').model, 'mistral-large-3');
+  assert.deepEqual(
+    [getPrice('mistral-large-latest').input, getPrice('mistral-large-latest').output],
+    [0.50, 1.50],
+  );
+  assert.equal(getPrice('mistral-medium-latest').input, 1.50);
+  // Cache read is Mistral's published 90% discount, not zero.
+  assert.equal(getPrice('mistral-small-4').cached, 0.015);
+
+  // DeepSeek, per api-docs.deepseek.com, verified 2026-08-04.
+  assert.deepEqual(
+    [getPrice('deepseek-v4-pro').input, getPrice('deepseek-v4-pro').output],
+    [0.435, 0.87],
+  );
+});
+
+test('models without a sourceable published rate stay unpriced', async () => {
+  const { getPrice, PRICES } = await import(pathToFileURL(PRICING).href);
+
+  // Meta publishes no first-party API pricing, so Llama must not carry an
+  // invented built-in rate. Unknown beats guessed.
+  assert.equal(PRICES.some((price) => price.provider === 'meta'), false);
+  for (const model of ['llama-4-maverick', 'llama-3.1-405b']) {
+    assert.equal(getPrice(model), null, `${model} must not resolve to a built-in price`);
+  }
+
+  // Models delisted from their provider's pricing page go with them, rather
+  // than lingering at a rate that can no longer be verified.
+  for (const model of ['deepseek-v3', 'deepseek-r1', 'gemini-1.5-flash', 'codestral']) {
+    assert.equal(getPrice(model), null, `${model} must not resolve to a built-in price`);
+  }
+});
+
+test('every downgrade suggestion points at a model that is actually priced', async () => {
+  const { DOWNGRADES, getPrice } = await import(pathToFileURL(PRICING).href);
+
+  for (const [from, options] of Object.entries(DOWNGRADES)) {
+    assert.ok(getPrice(from), `downgrade source ${from} is not priced`);
+    for (const option of options) {
+      assert.ok(getPrice(option.model), `${from} suggests unpriced ${option.model}`);
+    }
+  }
+});
+
+test('re-verified 2026-08-04 rates match published pricing', async () => {
+  const { getPrice } = await import(pathToFileURL(PRICING).href);
+
+  // OpenAI, per developers.openai.com. These four were wrong before the
+  // 2026-08-04 re-verification; o3 and gpt-5.6-luna by roughly 5x.
+  assert.deepEqual([getPrice('o3').input, getPrice('o3').output], [2.00, 8.00]);
+  assert.equal(getPrice('o3').cached, 0.50);
+  assert.deepEqual([getPrice('gpt-5.6-luna').input, getPrice('gpt-5.6-luna').output], [0.20, 1.20]);
+  assert.deepEqual([getPrice('gpt-5.6-terra').input, getPrice('gpt-5.6-terra').output], [2.00, 12.00]);
+  assert.equal(getPrice('o4-mini').cached, 0.275);
+
+  // xAI publishes cache-read rates; they were previously recorded as unpriced.
+  assert.equal(getPrice('grok-4.5').cached, 0.30);
+  assert.equal(getPrice('grok-4.3').cached, 0.20);
+  assert.equal(getPrice('grok-build').cached, 0.20);
+
+  // Anthropic re-verified with no change, including the introductory rate
+  // still in effect through 2026-08-31.
+  assert.deepEqual([getPrice('claude-sonnet-5').input, getPrice('claude-sonnet-5').output], [2.00, 10.00]);
+  assert.equal(getPrice('claude-opus-5').cacheWrite, 6.25);
 });
