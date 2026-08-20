@@ -15,6 +15,8 @@ import {
   analyzeLogFileFormat,
   buildHermesSessionQuery,
   hermesRowsToEvents,
+  buildGooseUsageQuery,
+  gooseRowsToEvents,
   readClaudeAgentActivity,
   classifyCodexRateLimitWindows,
   buildDelegationReport,
@@ -637,6 +639,71 @@ test('hermes: preserves xAI OAuth billing path without account identity', () => 
   assert.equal(event.accessPath, 'xAI OAuth (subscription)');
   assert.equal(event.email, undefined);
   assert.equal(event.accountId, undefined);
+});
+
+test('goose query reads only numeric ledger/session metadata and avoids double counting', () => {
+  const sessionColumns = [
+    'id', 'working_dir', 'updated_at', 'session_type', 'accumulated_input_tokens',
+    'accumulated_output_tokens', 'accumulated_total_tokens',
+    'accumulated_cache_read_tokens', 'accumulated_cache_write_tokens',
+    'accumulated_cost', 'provider_name', 'model_config_json', 'parent_session_id',
+  ];
+  const ledgerColumns = [
+    'id', 'session_id', 'created_timestamp', 'model', 'input_tokens',
+    'output_tokens', 'total_tokens', 'cache_read_tokens', 'cache_write_tokens',
+    'cost', 'cost_source', 'is_compaction',
+  ];
+  const query = buildGooseUsageQuery(sessionColumns, ledgerColumns);
+  assert.match(query, /FROM usage_ledger u JOIN sessions s/);
+  assert.match(query, /NOT EXISTS \(SELECT 1 FROM usage_ledger/);
+  assert.match(query, /json_extract\([^]*'\$\.model_name'\)/);
+  assert.doesNotMatch(query, /\bmessages\b|content_json|description|recipe_json/i);
+});
+
+test('goose rows preserve per-model/cache usage and cost provenance without content', () => {
+  const events = gooseRowsToEvents([
+    {
+      record_kind: 'ledger', record_id: 41, session_id: 'goose-session-1',
+      created_timestamp: 1787306400, model: 'anthropic/claude-sonnet-5',
+      provider_name: 'openrouter', input_tokens: 1200, output_tokens: 300,
+      total_tokens: 1500, cache_read_tokens: 800, cache_write_tokens: 50,
+      cost: 0.0123, cost_source: 'provider_reported', is_compaction: 0,
+      working_dir: '/Users/demo/work/api', session_type: 'user', parent_session_id: null,
+      content_json: 'must not be copied',
+    },
+    {
+      record_kind: 'session', record_id: 'old-session', session_id: 'old-session',
+      created_timestamp: 1787306500, model: 'gpt-5.6-luna', provider_name: 'openai',
+      input_tokens: 500, output_tokens: 50, total_tokens: 550,
+      cache_read_tokens: 0, cache_write_tokens: 0, cost: 0.0002,
+      cost_source: 'estimated', is_compaction: 0, working_dir: '/Users/demo/work/api',
+      session_type: 'sub_agent', parent_session_id: 'goose-session-1',
+    },
+    {
+      record_kind: 'ledger', record_id: 42, session_id: 'goose-session-free',
+      created_timestamp: 1787306600, model: 'local-model', provider_name: 'ollama',
+      input_tokens: 100, output_tokens: 10, total_tokens: 110,
+      cache_read_tokens: 0, cache_write_tokens: 0, cost: 0,
+      cost_source: 'provider_reported', is_compaction: 0,
+      working_dir: '/Users/demo/work/api', session_type: 'user', parent_session_id: null,
+    },
+  ]);
+  assert.equal(events.length, 3);
+  assert.equal(events[0].tool, 'goose');
+  assert.equal(events[0].provider, 'anthropic');
+  assert.equal(events[0].billingProvider, 'openrouter');
+  assert.equal(events[0].cachedDisjoint, false);
+  assert.equal(events[0].cacheCreationIncludedInInput, true);
+  assert.equal(events[0].pricingConfidence, 'reported');
+  assert.equal(events[0].totalCost, 0.0123);
+  assert.equal(events[0].content_json, undefined);
+  assert.equal(events[0].prompt, undefined);
+  assert.equal(events[1].confidence, 'imported');
+  assert.equal(events[1].role, 'worker');
+  assert.equal(events[1].parentSessionId, 'goose-session-1');
+  assert.equal(events[2].totalCost, 0);
+  assert.equal(events[2].costRecorded, true);
+  assert.equal(events[2].pricingConfidence, 'reported');
 });
 
 test('delegation report: claude per-turn and hermes per-session splits', () => {

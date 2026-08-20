@@ -117,6 +117,33 @@ def test_pricing_current_recorded_models():
     print("✓ test_pricing_current_recorded_models passed")
 
 
+def test_pricing_dated_and_inclusive_cache_rates():
+    """Time-tiered rates and inclusive ledgers match the JavaScript pricer."""
+    pricer = Pricer()
+    off_peak = pricer.price_call(
+        "deepseek-v4-flash", 1_000_000, 1_000_000,
+        timestamp=1787313600,  # 2026-08-21 12:00 UTC
+    )
+    peak = pricer.price_call(
+        "deepseek-v4-flash", 1_000_000, 1_000_000,
+        timestamp=1787293800,  # 2026-08-21 06:30 UTC
+    )
+    assert off_peak[2] == 0.88
+    assert peak[2] == 1.76
+
+    inclusive = pricer.price_call(
+        "claude-sonnet-5", 1_000_000, 0,
+        cached_tokens=200_000,
+        cache_creation_tokens=100_000,
+        cache_creation_included_in_input=True,
+    )
+    assert inclusive[2] == 1.69
+    assert pricer.get_price("codestral-latest").model == "codestral"
+    assert pricer.get_price("grok-4.6").cached_input_per_1m == 0.5
+    assert pricer.get_price("glm-5.3").output_per_1m == 4.4
+    print("✓ test_pricing_dated_and_inclusive_cache_rates passed")
+
+
 def test_tracker_memory():
     """Test in-memory tracking."""
     tracker = Tracker()  # in-memory mode
@@ -1041,6 +1068,7 @@ def run_all():
         test_pricing_unknown_model,
         test_pricing_aliases,
         test_pricing_current_recorded_models,
+        test_pricing_dated_and_inclusive_cache_rates,
         test_tracker_memory,
         test_tracker_separates_unknown_pricing,
         test_tracker_sqlite,

@@ -5,6 +5,22 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+### Added
+
+- Read Goose's local SQLite usage ledger with no setup, preserving per-call
+  model, token, cache, timestamp, and cost provenance while never querying the
+  messages table. Older sessions fall back to numeric accumulated totals only
+  when no ledger rows exist, preventing double counting. Fixture tested.
+
+### Pricing
+
+- Update DeepSeek V4 to the rates effective 2026-08-16 and select its published
+  peak/off-peak tier from each event's UTC timestamp.
+- Apply Gemini 3.6 Flash's introductory rate and add a dated CI guard for its
+  2027-01-01 change; restore Codestral from Mistral's current price list; add
+  Grok 4.6 and Z.AI's current GLM text models. Keep the Python SDK table and
+  time-tier calculation in sync with the JavaScript core.
+
 ## 0.6.0 — 2026-08-10
 
 ### Added

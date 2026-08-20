@@ -7,7 +7,7 @@
 </h1>
 
 **Local-first usage and cost meter for Claude Code, Codex, Cursor, Grok Build,
-and other AI coding agents — no account, no telemetry.**
+Goose, and other AI coding agents — no account, no telemetry.**
 
 [Website](https://tokimeter.com) · [Coverage](#coverage-and-data-fidelity) ·
 [How the numbers work](#honest-numbers-by-design)
@@ -40,7 +40,7 @@ npx tokimeter install
 
 ## Why Tokimeter exists
 
-I use Claude Code, Codex, Cursor, Hermes, Grok Build, and sometimes more. Each
+I use Claude Code, Codex, Cursor, Goose, Hermes, Grok Build, and sometimes more. Each
 stores a different part of the usage picture. Tokimeter brings the numeric
 metadata already on your machine into one private report, so usage, limits,
 cache savings, and API-equivalent costs are easier to understand.
@@ -201,6 +201,7 @@ the report only observes.
 | Codex (CLI/Desktop) | Live verified | Local session logs shared by CLI and desktop coding sessions; no setup for reports, optional setup for live metering/overlay | Exact recorded token/cache counts and `~` cost. Vendor-reported 5h/weekly counters and resets when Codex records them. |
 | Cursor CLI/Desktop Agent | Live verified | Status-line and stop hooks after `tokimeter setup cursor`; CSV import for classic editor chat | Exact per-turn usage after hook setup, local windows, and user-budget warnings. Earlier hookless turns are not reconstructed. |
 | Grok Build | Live verified | Local `~/.grok/logs`; optional stop hook for alarms | Exact recorded per-turn tokens and `~` cost. Local windows and user budgets, not a claimed vendor quota. |
+| Goose | Fixture tested | Local `sessions.db` numeric usage ledger; no setup for reports | Per-call model/token/cache counts and provider-reported or estimated cost when recorded. Message content is never queried. |
 | Hermes | Live verified | Local `~/.hermes` database; no setup for reports | Provider-recorded session totals and billed cost when present; otherwise priced `~` estimates. |
 | OpenHuman | Fixture tested | Active workspace `state/costs.jsonl`; no setup for reports | Exact recorded token buckets. Costs are per-request model costs, not TinyHumans credit use or your subscription bill. Memory and transcript data are never read. |
 | opencode | Live verified with 1.17.18 | Local message files/database; no setup for reports | Recorded token counts and request-time cost when present; otherwise priced `~` estimates. |
@@ -235,6 +236,15 @@ subagents, and self-hosted Telegram bridging, and sessions are labeled by
 source in the report. (Only Nous's fully hosted bots leave no local data to
 read.) `--tool hermes` scopes to it; when Hermes reports its own billed cost,
 Tokimeter uses that instead of estimating.
+
+**Goose**: tracked automatically, zero setup, from Goose's local
+`sessions/sessions.db` database. Tokimeter reads the numeric `usage_ledger`
+for per-call model, input/output, cache, timestamp, and cost provenance; it
+never queries Goose's `messages` table. Migrated sessions that predate the
+ledger fall back to numeric accumulated session totals only when they have no
+ledger rows, avoiding double counting. `GOOSE_PATH_ROOT` is honored and
+`--tool goose` scopes any report to it. This reader is fixture tested, not yet
+claimed as live verified.
 
 **OpenHuman**: tracked automatically from the active workspace's append-only
 `state/costs.jsonl` ledger (normally under `~/.openhuman/users/<local-id>/workspace`;

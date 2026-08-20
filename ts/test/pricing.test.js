@@ -256,10 +256,10 @@ test('report JSON discovers OpenHuman active-user costs and preserves cost prove
   assert.doesNotMatch(output, new RegExp(userId));
 });
 
-test('corrected 2026-08-04 rates match published pricing, aliases included', async () => {
+test('corrected rates match published pricing, aliases included', async () => {
   const { getPrice } = await import(pathToFileURL(PRICING).href);
 
-  // Google, short-context tier per ai.google.dev, verified 2026-08-04.
+  // Google, short-context tier per ai.google.dev, verified 2026-08-21.
   assert.deepEqual(
     [getPrice('gemini-2.5-flash').input, getPrice('gemini-2.5-flash').output],
     [0.30, 2.50],
@@ -272,8 +272,12 @@ test('corrected 2026-08-04 rates match published pricing, aliases included', asy
   // The pre-correction names stay resolvable as aliases.
   assert.equal(getPrice('gemini-3-flash').model, 'gemini-3.5-flash');
   assert.equal(getPrice('gemini-3-pro').model, 'gemini-3.1-pro-preview');
+  assert.deepEqual(
+    [getPrice('gemini-3.6-flash').input, getPrice('gemini-3.6-flash').output],
+    [0.75, 3.75],
+  );
 
-  // Mistral, per mistral.ai/pricing/api, verified 2026-08-04. The floating
+  // Mistral, per mistral.ai/pricing/api, verified 2026-08-21. The floating
   // -latest aliases must resolve to the generation they actually point at.
   assert.equal(getPrice('mistral-large-latest').model, 'mistral-large-3');
   assert.deepEqual(
@@ -283,12 +287,36 @@ test('corrected 2026-08-04 rates match published pricing, aliases included', asy
   assert.equal(getPrice('mistral-medium-latest').input, 1.50);
   // Cache read is Mistral's published 90% discount, not zero.
   assert.equal(getPrice('mistral-small-4').cached, 0.015);
+  assert.equal(getPrice('codestral-latest').model, 'codestral');
+  assert.deepEqual([getPrice('codestral').input, getPrice('codestral').output], [0.30, 0.90]);
 
-  // DeepSeek, per api-docs.deepseek.com, verified 2026-08-04.
+  // DeepSeek off-peak base rates, per api-docs.deepseek.com, verified 2026-08-21.
   assert.deepEqual(
     [getPrice('deepseek-v4-pro').input, getPrice('deepseek-v4-pro').output],
-    [0.435, 0.87],
+    [0.66, 1.98],
   );
+});
+
+test('DeepSeek pricing selects the published UTC peak tier from the event timestamp', async () => {
+  const { priceCall } = await import(pathToFileURL(PRICING).href);
+  const offPeak = priceCall('deepseek-v4-flash', 1_000_000, 1_000_000, 0, 0, {
+    timestamp: Date.parse('2026-08-21T12:00:00Z'),
+  });
+  const peak = priceCall('deepseek-v4-flash', 1_000_000, 1_000_000, 0, 0, {
+    timestamp: Date.parse('2026-08-21T06:30:00Z'),
+  });
+  assert.equal(offPeak.totalCost, 0.88);
+  assert.equal(peak.totalCost, 1.76);
+  assert.equal(peak.price.pricingTier, 'peak');
+});
+
+test('inclusive cache-write ledgers do not double count cache creation tokens', async () => {
+  const { priceCall } = await import(pathToFileURL(PRICING).href);
+  const priced = priceCall('claude-sonnet-5', 1_000_000, 0, 200_000, 100_000, {
+    cachedIncludedInInput: true,
+    cacheCreationIncludedInInput: true,
+  });
+  assert.equal(priced.totalCost, 1.69);
 });
 
 test('models without a sourceable published rate stay unpriced', async () => {
@@ -301,9 +329,9 @@ test('models without a sourceable published rate stay unpriced', async () => {
     assert.equal(getPrice(model), null, `${model} must not resolve to a built-in price`);
   }
 
-  // Models delisted from their provider's pricing page go with them, rather
-  // than lingering at a rate that can no longer be verified.
-  for (const model of ['deepseek-v3', 'deepseek-r1', 'gemini-1.5-flash', 'codestral']) {
+  // Unsourced models stay unpriced. Codestral is intentionally absent here:
+  // Mistral lists it again and Tokimeter now carries that published rate.
+  for (const model of ['deepseek-v3', 'deepseek-r1', 'gemini-1.5-flash']) {
     assert.equal(getPrice(model), null, `${model} must not resolve to a built-in price`);
   }
 });
@@ -319,7 +347,7 @@ test('every downgrade suggestion points at a model that is actually priced', asy
   }
 });
 
-test('re-verified 2026-08-04 rates match published pricing', async () => {
+test('re-verified active rates match published pricing', async () => {
   const { getPrice } = await import(pathToFileURL(PRICING).href);
 
   // OpenAI, per developers.openai.com. These four were wrong before the
@@ -334,6 +362,9 @@ test('re-verified 2026-08-04 rates match published pricing', async () => {
   assert.equal(getPrice('grok-4.5').cached, 0.30);
   assert.equal(getPrice('grok-4.3').cached, 0.20);
   assert.equal(getPrice('grok-build').cached, 0.20);
+  assert.deepEqual([getPrice('grok-4.6').input, getPrice('grok-4.6').output], [2.00, 6.00]);
+  assert.equal(getPrice('grok-4.6').cached, 0.50);
+  assert.deepEqual([getPrice('glm-5.3').input, getPrice('glm-5.3').output], [1.40, 4.40]);
 
   // Anthropic re-verified with no change, including the introductory rate
   // still in effect through 2026-08-31.
