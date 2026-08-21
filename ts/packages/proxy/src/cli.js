@@ -28,7 +28,7 @@ import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import http from 'node:http';
-import { readClaudeUsageEvents, readClaudeAgentActivity, readCodexTokenEvents, readAiderHistoryEvents, readGrokUsageEvents, readGrokSessionMeta, analyzeLogFileFormat, readCodexRateLimitSnapshots, classifyCodexRateLimitWindows, buildHermesSessionQuery, hermesRowsToEvents, buildGooseUsageQuery, gooseRowsToEvents, buildDelegationReport, buildAgentBreakdown, buildOrchestrationReport, buildBurnReport, buildBurnPlanner, buildSavingsReport, buildRoutingPolicy, formatRoutingPolicy, renderReportMarkdown, renderReportHtml, buildSessionTrace, buildMonthCard, renderMonthCardSvg, readOpencodeMessageFile, opencodeRowsToEvents, readClineTaskEvents, readClineSessionEvents, readCopilotOtelEvents, cursorStopPayloadToRecord, readCursorUsageEvents, parseCursorUsageCsv, readOpenHumanCostEvents, openHumanWorkspaceCandidates, recentCodexRolloutFiles as recentCodexRolloutFilesShared } from './parsers.js';
+import { readClaudeUsageEvents, readClaudeAgentActivity, readCodexTokenEvents, readAiderHistoryEvents, readGrokUsageEvents, readGrokSessionMeta, analyzeLogFileFormat, readCodexRateLimitSnapshots, classifyCodexRateLimitWindows, buildHermesSessionQuery, hermesRowsToEvents, buildGooseUsageQuery, gooseRowsToEvents, buildDelegationReport, buildAgentBreakdown, buildOrchestrationReport, buildBurnReport, buildBurnPlanner, buildSavingsReport, buildAdvisorReport, buildRoutingPolicy, formatRoutingPolicy, renderReportMarkdown, renderReportHtml, buildSessionTrace, buildMonthCard, renderMonthCardSvg, readOpencodeMessageFile, opencodeRowsToEvents, readClineTaskEvents, readClineSessionEvents, readCopilotOtelEvents, cursorStopPayloadToRecord, readCursorUsageEvents, parseCursorUsageCsv, readOpenHumanCostEvents, openHumanWorkspaceCandidates, recentCodexRolloutFiles as recentCodexRolloutFilesShared } from './parsers.js';
 import {
   chunkCloudEvents,
   clearCloudPause,
@@ -147,6 +147,10 @@ if (args[0] === 'burn') {
 }
 if (args[0] === 'savings') {
   await runSavings(args.slice(1));
+  process.exit(0);
+}
+if (args[0] === 'advisor') {
+  await runAdvisor(args.slice(1));
   process.exit(0);
 }
 if (args[0] === 'trace') {
@@ -5027,6 +5031,53 @@ async function runSavings(savingsArgs) {
   console.log(`  read prompt difficulty, so this is an upper bound. Nothing is auto-changed.\n`);
 }
 
+// ─── Advisor: ranked next actions from local usage evidence ─────────────────
+async function runAdvisor(advisorArgs) {
+  const daysArg = advisorArgs.find(arg => arg.startsWith('--days='));
+  const days = Math.max(1, parseInt(daysArg?.split('=')[1] || '30', 10) || 30);
+  const limitArg = advisorArgs.find(arg => arg.startsWith('--limit='));
+  const limit = advisorArgs.includes('--all')
+    ? Number.POSITIVE_INFINITY
+    : Math.max(1, parseInt(limitArg?.split('=')[1] || '3', 10) || 3);
+  const asJson = advisorArgs.includes('--json');
+  const events = collectLocalUsageEvents({ maxAgeMs: days * 86400 * 1000 });
+  const report = buildAdvisorReport(events, { windowDays: days, maxRecommendations: limit, burn: readBurnConfig() });
+
+  if (asJson) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+
+  console.log(`\n  Tokimeter Advisor · last ${days} days`);
+  console.log(`  ${'═'.repeat(50)}`);
+  if (!report.recommendations.length) {
+    console.log(`  No actionable recommendation has enough evidence yet.`);
+    console.log(`  Keep using your agents and try again after more usage is recorded.\n`);
+    return;
+  }
+
+  const money = (value) => `~$${Number(value || 0).toFixed(2)}`;
+  for (const [index, recommendation] of report.recommendations.entries()) {
+    console.log(`\n  ${index + 1}. ${recommendation.title}`);
+    console.log(`     Confidence: ${recommendation.confidence} · cost basis: ${recommendation.costBasis}`);
+    if (recommendation.type === 'spend-spike') {
+      console.log(`     Evidence: ${money(recommendation.evidence.cost)} vs ${money(recommendation.evidence.baselineCost)} baseline · ${recommendation.evidence.ratio}×`);
+    } else if (recommendation.type === 'pricing-coverage') {
+      console.log(`     Evidence: ${recommendation.evidence.calls} unpriced calls for ${recommendation.evidence.model}`);
+    } else if (recommendation.type === 'model-routing') {
+      console.log(`     Evidence: ${recommendation.evidence.routineTurns}/${recommendation.evidence.totalTurns} turns looked routine · save up to ${money(recommendation.impact.upperBoundUsdPerMonth)}/mo`);
+    } else if (recommendation.type === 'cross-tool-overlap') {
+      console.log(`     Evidence: ${recommendation.evidence.windows} windows within ${recommendation.evidence.gapMinutes}m · ${recommendation.evidence.toolCombination}${recommendation.scope?.project ? ` · ${shortenPath(String(recommendation.scope.project))}` : ''}`);
+    }
+    console.log(`     Next: ${recommendation.action}`);
+    console.log(`     Caveat: ${recommendation.limitation}`);
+  }
+  if (report.candidateCount > report.recommendationCount) {
+    console.log(`\n  ${report.candidateCount - report.recommendationCount} more available · use --all to show them.`);
+  }
+  console.log(`\n  Local metadata only · no prompt reading, model call, or automatic changes.\n`);
+}
+
 // ─── Runaway-agent alarm: burn-rate spikes vs your own baseline ──────────────
 // Reuses buildBurnReport (parsers.js). Thresholds are tunable like budgets:
 //   tokimeter config set budget.burn.factor 3       (× your baseline to flag)
@@ -6519,6 +6570,7 @@ function printHelp() {
     tokimeter agents             Director vs subagent-worker cost split (delegation report)
     tokimeter burn               Runaway-agent alarm: burn-rate spikes vs your own baseline
     tokimeter savings            Where routine premium-model turns could shift cheaper (factual)
+    tokimeter advisor            Ranked next actions from local usage evidence (add --json or --all)
     tokimeter savings --emit-policy[=litellm|openrouter]   Routing policy from your real usage, for your gateway
     tokimeter report --orchestration   Add cross-tool "used together" windows to the report
     tokimeter limits             5h rolling window + weekly usage vs your budgets

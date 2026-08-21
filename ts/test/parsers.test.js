@@ -25,6 +25,7 @@ import {
   buildBurnReport,
   buildBurnPlanner,
   buildSavingsReport,
+  buildAdvisorReport,
   buildRoutingPolicy,
   formatRoutingPolicy,
   renderReportMarkdown,
@@ -1112,6 +1113,87 @@ test('savings: hermes session aggregates are excluded from the heuristic', () =>
     inputTokens: 300, outputTokens: 150, cachedTokens: 0, cacheCreationTokens: 0, timestamp: Date.now(), totalCost: 0.05 }];
   const r = buildSavingsReport(events, { windowDays: 30 });
   assert.equal(r.models.length, 0);
+});
+
+// ─── Advisor (ranked, evidence-backed next actions) ─────────────────────────
+
+test('advisor: ranks a spend spike first and states its evidence contract', () => {
+  const now = 1_000_000_000_000;
+  const events = [];
+  for (let i = 1; i <= 8; i++) events.push(burnEv('codex', now - i * 6 * H, 1));
+  for (let i = 0; i < 4; i++) events.push(burnEv('codex', now - 10 * 60 * 1000, 3));
+
+  const report = buildAdvisorReport(events, { now, windowDays: 30 });
+  const recommendation = report.recommendations[0];
+  assert.equal(recommendation.type, 'spend-spike');
+  assert.equal(recommendation.confidence, 'high');
+  assert.equal(recommendation.costBasis, 'reported-or-api-equivalent');
+  assert.equal(recommendation.evidence.ratio, 12);
+  assert.ok(recommendation.action.length > 0);
+  assert.ok(recommendation.limitation.includes('intentional'));
+  assert.equal(report.generatedAt, new Date(now).toISOString());
+  assert.ok(report.privacy.includes('No prompt'));
+});
+
+test('advisor: turns repeated routine premium usage into a bounded routing suggestion', () => {
+  const now = Date.UTC(2026, 7, 20, 12);
+  const events = [];
+  for (let i = 0; i < 10; i++) {
+    events.push({ tool: 'claude-code', provider: 'anthropic', model: 'claude-fable-5', source: 'claude-transcript-usage',
+      inputTokens: 300, outputTokens: 150, cachedTokens: 0, cacheCreationTokens: 0,
+      timestamp: now - i * 1000, totalCost: priceCall('claude-fable-5', 300, 150, 0, 0, { cachedIncludedInInput: false }).totalCost });
+  }
+  const report = buildAdvisorReport(events, { now, windowDays: 30 });
+  const recommendation = report.recommendations.find((item) => item.type === 'model-routing');
+  assert.ok(recommendation);
+  assert.equal(recommendation.confidence, 'medium');
+  assert.equal(recommendation.evidence.routineTurns, 10);
+  assert.ok(recommendation.impact.upperBoundUsdPerMonth > 0);
+  assert.ok(recommendation.limitation.includes('upper bound'));
+});
+
+test('advisor: unpriced calls are excluded and prompt a source check', () => {
+  const now = Date.UTC(2026, 7, 20, 12);
+  const report = buildAdvisorReport([
+    { tool: 'goose', model: 'hosted-llama', timestamp: now, pricingConfidence: 'fallback', roughEstimateCost: 2.5 },
+    { tool: 'goose', model: 'hosted-llama', timestamp: now - 1000, pricingConfidence: 'fallback', roughEstimateCost: 1.5 },
+  ], { now });
+  const recommendation = report.recommendations[0];
+  assert.equal(recommendation.type, 'pricing-coverage');
+  assert.equal(recommendation.costBasis, 'unpriced');
+  assert.equal(recommendation.evidence.calls, 2);
+  assert.equal(report.coverage.unpricedEvents, 2);
+  assert.ok(recommendation.action.includes('tokimeter pricing source'));
+});
+
+test('advisor: overlap needs repetition and stays explicitly low confidence', () => {
+  const now = Date.UTC(2026, 7, 20, 12);
+  const events = [
+    ev('claude-code', 'claude-fable-5', 0, 1, '/project'),
+    ev('codex', 'gpt-5.5', 5, 1, '/project'),
+    ev('claude-code', 'claude-fable-5', 30, 1, '/project'),
+    ev('codex', 'gpt-5.5', 35, 1, '/project'),
+  ];
+  const report = buildAdvisorReport(events, { now, maxRecommendations: 10 });
+  const recommendation = report.recommendations.find((item) => item.type === 'cross-tool-overlap');
+  assert.ok(recommendation);
+  assert.equal(recommendation.confidence, 'low');
+  assert.equal(recommendation.evidence.windows, 2);
+  assert.ok(recommendation.limitation.includes('correlation'));
+});
+
+test('advisor: limit is deterministic and empty evidence stays quiet', () => {
+  const now = Date.UTC(2026, 7, 20, 12);
+  const empty = buildAdvisorReport([], { now });
+  assert.equal(empty.recommendationCount, 0);
+  assert.deepEqual(empty.recommendations, []);
+
+  const report = buildAdvisorReport([
+    { tool: 'goose', model: 'unknown-a', timestamp: now, pricingConfidence: 'fallback' },
+    { tool: 'goose', model: 'unknown-b', timestamp: now, pricingConfidence: 'fallback' },
+  ], { now, maxRecommendations: 1 });
+  assert.equal(report.recommendationCount, 1);
+  assert.equal(report.candidateCount, 1);
 });
 
 // ─── Routing policy export (savings --emit-policy) ───────────────────────────
