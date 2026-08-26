@@ -51,6 +51,13 @@ provider, model, project, and day — including exact cache read/write accountin
 and what prompt caching saved you. `--days=7`, `--tool cursor`,
 `--provider xai`, and `--json` are supported.
 
+After installing, `tokimeter advisor` ranks up to three next actions from those
+same local measurements. It can flag spend spikes, missing pricing, routine
+premium-model work worth testing on a cheaper tier, and repeated cross-tool
+overlap. Each result includes its evidence, confidence, cost basis, action, and
+caveat. Use `--all`, `--days=7`, or `--json` to change the view. Advisor never
+reads prompt content, calls a model, or automatically changes configuration.
+
 The optional hosted dashboard starts with a 7-day Pro trial. If you do not
 upgrade, cloud sync and hosted access pause at trial end; synced cloud data is
 deleted 30 days later. Local reports and tracking remain free and continue on

@@ -7,6 +7,11 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ### Added
 
+- Add `tokimeter advisor`, a deterministic local shortlist of ranked actions
+  built from spend spikes, pricing gaps, routine premium-model usage, and
+  repeated cross-tool overlap. Every suggestion includes its evidence,
+  confidence, cost basis, next action, and limitation; `--json` exposes the
+  same contract without reading prompts, calling a model, or changing settings.
 - Read Goose's local SQLite usage ledger with no setup, preserving per-call
   model, token, cache, timestamp, and cost provenance while never querying the
   messages table. Older sessions fall back to numeric accumulated totals only

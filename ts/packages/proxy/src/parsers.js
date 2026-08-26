@@ -1695,6 +1695,146 @@ export function buildSavingsReport(events, { windowDays = 30 } = {}) {
   };
 }
 
+// ─── Advisor: ranked, evidence-backed next actions ──────────────────────────
+// Composes existing deterministic analyzers into a short action list. It reads
+// token metadata only, never prompt/response content, and never calls a model or
+// changes configuration. Every recommendation states the evidence, cost basis,
+// confidence, and limitation so consumers can distinguish measurement from a
+// heuristic suggestion.
+
+function advisorIdPart(value) {
+  const raw = String(value || 'unknown');
+  const slug = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'unknown';
+  let hash = 2166136261;
+  for (let i = 0; i < raw.length; i++) hash = Math.imul(hash ^ raw.charCodeAt(i), 16777619);
+  return `${slug.slice(0, 48)}-${(hash >>> 0).toString(36)}`;
+}
+
+export function buildAdvisorReport(events, {
+  now = Date.now(),
+  windowDays = 30,
+  maxRecommendations = 3,
+  burn = {},
+  gapMinutes = 10,
+} = {}) {
+  const sourceEvents = Array.isArray(events) ? events : [];
+  const recommendations = [];
+  const add = (recommendation) => recommendations.push(recommendation);
+
+  const burnReport = buildBurnReport(sourceEvents, { ...burn, now });
+  for (const alert of burnReport.alerts) {
+    const daily = alert.kind === 'daily';
+    add({
+      id: `burn-${alert.kind}-${advisorIdPart(alert.tool)}`,
+      type: 'spend-spike',
+      priority: daily ? 96 : 100,
+      confidence: 'high',
+      title: daily ? 'Review today\'s spend spike' : `Check the ${alert.tool} spend spike`,
+      evidence: daily
+        ? { window: 'today', cost: burnReport.today.cost, baselineCost: burnReport.today.baselineDaily, ratio: alert.ratio }
+        : { windowMinutes: burnReport.recentWindowMinutes, tool: alert.tool, cost: alert.recentCost, baselineCost: alert.baselineHourly, ratio: alert.ratio },
+      impact: null,
+      action: daily
+        ? 'Open the highest-cost sessions from today and stop or correct any agent doing unintended work.'
+        : `Inspect the latest ${alert.tool} sessions and stop or correct any agent doing unintended work.`,
+      costBasis: 'reported-or-api-equivalent',
+      limitation: 'A spike is unusual for your history, but it can still be intentional work.',
+    });
+  }
+
+  const unpriced = new Map();
+  for (const event of sourceEvents) {
+    if (event.pricingConfidence !== 'fallback' && !(Number(event.roughEstimateCost) > 0)) continue;
+    const model = event.model || 'unknown';
+    const current = unpriced.get(model) || { model, calls: 0, roughEstimateCost: 0 };
+    current.calls += 1;
+    current.roughEstimateCost += Math.max(0, Number(event.roughEstimateCost) || 0);
+    unpriced.set(model, current);
+  }
+  const unpricedModels = [...unpriced.values()].sort((a, b) => b.calls - a.calls || String(a.model).localeCompare(String(b.model)));
+  if (unpricedModels.length) {
+    const top = unpricedModels[0];
+    add({
+      id: `pricing-coverage-${advisorIdPart(top.model)}`,
+      type: 'pricing-coverage',
+      priority: 90,
+      confidence: 'high',
+      title: `Set a verified price for ${top.model}`,
+      evidence: { model: top.model, calls: top.calls, affectedModels: unpricedModels.length },
+      impact: null,
+      action: `Run tokimeter pricing source ${top.model}, then set a custom price only if your provider publishes one.`,
+      costBasis: 'unpriced',
+      limitation: 'Tokimeter excludes these calls from priced totals; a rough fallback is not treated as spend.',
+    });
+  }
+
+  const savingsReport = buildSavingsReport(sourceEvents, { windowDays });
+  for (const model of savingsReport.models) {
+    if (model.routineTurns < 3 || model.savings <= 0) continue;
+    const monthlySavings = windowDays > 0 ? Math.round((model.savings / windowDays) * 30 * 100) / 100 : null;
+    add({
+      id: `model-routing-${advisorIdPart(model.model)}-${advisorIdPart(model.cheaperModel)}`,
+      type: 'model-routing',
+      priority: 70 + Math.min(15, Math.floor(monthlySavings || 0)),
+      confidence: 'medium',
+      title: `Test ${model.cheaperModel} on routine ${model.model} turns`,
+      evidence: {
+        model: model.model,
+        cheaperModel: model.cheaperModel,
+        routineTurns: model.routineTurns,
+        totalTurns: model.totalTurns,
+        windowSavings: model.savings,
+        windowDays,
+      },
+      impact: { upperBoundUsdPerMonth: monthlySavings },
+      action: 'Try the cheaper model on a small, reversible slice and compare completion quality before routing more work.',
+      costBasis: 'api-equivalent',
+      limitation: 'Routine is inferred from token shape, not prompt difficulty; savings are an upper bound and quality may differ.',
+    });
+  }
+
+  const orchestration = buildOrchestrationReport(sourceEvents, { gapMinutes });
+  for (const project of orchestration.projects) {
+    if (project.windows < 2) continue;
+    add({
+      id: `cross-tool-overlap-${advisorIdPart(project.project)}`,
+      type: 'cross-tool-overlap',
+      priority: 50 + Math.min(10, project.windows),
+      confidence: 'low',
+      title: 'Review repeated cross-tool overlap',
+      scope: { project: project.project },
+      evidence: { windows: project.windows, cost: project.cost, toolCombination: project.topCombination, gapMinutes },
+      impact: null,
+      action: 'Check whether both tools were doing distinct jobs; if not, assign one owner per task to reduce duplicated context and work.',
+      costBasis: 'reported-or-api-equivalent',
+      limitation: 'Close timing in one project is correlation only; parallel tool use may be deliberate and useful.',
+    });
+  }
+
+  recommendations.sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
+  const limit = Number.isFinite(maxRecommendations) ? Math.max(0, Math.floor(maxRecommendations)) : recommendations.length;
+  const selected = recommendations.slice(0, limit);
+  const tools = new Set(sourceEvents.map((event) => event.tool).filter(Boolean));
+  const projects = new Set(sourceEvents.map((event) => event.cwd).filter(Boolean));
+  const unpricedEvents = sourceEvents.filter((event) => event.pricingConfidence === 'fallback' || Number(event.roughEstimateCost) > 0).length;
+
+  return {
+    generatedAt: new Date(now).toISOString(),
+    windowDays,
+    recommendationCount: selected.length,
+    candidateCount: recommendations.length,
+    recommendations: selected,
+    coverage: {
+      events: sourceEvents.length,
+      tools: tools.size,
+      projects: projects.size,
+      pricedEvents: sourceEvents.length - unpricedEvents,
+      unpricedEvents,
+    },
+    privacy: 'Computed locally from usage metadata. No prompt or response content is read, and no model call is made.',
+  };
+}
+
 // ─── Router-config export (4.4): savings → a policy your gateway can enforce ─
 // Tokimeter observes; gateways (LiteLLM, OpenRouter, Foreman) route. This
 // turns the savings report into a suggested routing policy: for each premium

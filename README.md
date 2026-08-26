@@ -176,6 +176,7 @@ your machine with no extra model calls:
 
 ```bash
 tokimeter savings                  # routine work that could run cheaper (upper bound, never a nudge)
+tokimeter advisor                  # top evidence-backed actions, ranked with confidence and caveats
 tokimeter agents                   # director vs subagent spend, broken out by agent type and skill
 tokimeter plan                     # headroom left in each budget window + time-to-limit at your pace
 tokimeter trace <session>          # one session explained: cost, models, delegation, cache
@@ -184,9 +185,12 @@ tokimeter report --md > report.md  # shareable Markdown report (also --html) for
 tokimeter report --provider xai    # xAI usage across Grok Build, Hermes, and other tracked tools
 ```
 
-Every one is factual: it restates your own token counts, excludes unknown
-models from priced totals, shows any fallback only as a separate rough
-estimate, and never invents a recommendation. `tokimeter savings
+The underlying reports are factual: they restate your own token counts, exclude
+unknown models from priced totals, and show any fallback only as a separate
+rough estimate. `tokimeter advisor` turns those measurements into a ranked
+shortlist, but keeps each suggestion inspectable with its evidence, confidence,
+cost basis, next action, and limitation. It never reads prompt content, calls a
+model, or changes configuration. `tokimeter savings
 --emit-policy` goes one step further and prints a routing policy in
 LiteLLM / OpenRouter format from your real usage, so a gateway can enforce what
 the report only observes.
