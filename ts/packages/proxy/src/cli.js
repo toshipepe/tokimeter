@@ -26,9 +26,9 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import http from 'node:http';
-import { readClaudeUsageEvents, readClaudeAgentActivity, readCodexTokenEvents, readAiderHistoryEvents, readGrokUsageEvents, readGrokSessionMeta, analyzeLogFileFormat, readCodexRateLimitSnapshots, classifyCodexRateLimitWindows, buildHermesSessionQuery, hermesRowsToEvents, buildDelegationReport, buildAgentBreakdown, buildOrchestrationReport, buildBurnReport, buildBurnPlanner, buildSavingsReport, buildRoutingPolicy, formatRoutingPolicy, renderReportMarkdown, renderReportHtml, buildSessionTrace, buildMonthCard, renderMonthCardSvg, readOpencodeMessageFile, opencodeRowsToEvents, readClineTaskEvents, readClineSessionEvents, readCopilotOtelEvents, cursorStopPayloadToRecord, readCursorUsageEvents, parseCursorUsageCsv, readOpenHumanCostEvents, openHumanWorkspaceCandidates, recentCodexRolloutFiles as recentCodexRolloutFilesShared } from './parsers.js';
+import { readClaudeUsageEvents, readClaudeAgentActivity, readCodexTokenEvents, readAiderHistoryEvents, readGrokUsageEvents, readGrokSessionMeta, analyzeLogFileFormat, readCodexRateLimitSnapshots, classifyCodexRateLimitWindows, buildHermesSessionQuery, hermesRowsToEvents, buildGooseUsageQuery, gooseRowsToEvents, buildDelegationReport, buildAgentBreakdown, buildOrchestrationReport, buildBurnReport, buildBurnPlanner, buildSavingsReport, buildRoutingPolicy, formatRoutingPolicy, renderReportMarkdown, renderReportHtml, buildSessionTrace, buildMonthCard, renderMonthCardSvg, readOpencodeMessageFile, opencodeRowsToEvents, readClineTaskEvents, readClineSessionEvents, readCopilotOtelEvents, cursorStopPayloadToRecord, readCursorUsageEvents, parseCursorUsageCsv, readOpenHumanCostEvents, openHumanWorkspaceCandidates, recentCodexRolloutFiles as recentCodexRolloutFilesShared } from './parsers.js';
 import {
   chunkCloudEvents,
   clearCloudPause,
@@ -2804,6 +2804,14 @@ async function runDoctor() {
       : `${HERMES_STATE_DB} exists but no non-zero usage sessions were recognized`);
   }
 
+  const gooseDbs = gooseDatabaseCandidates().filter((path) => existsSync(path));
+  if (gooseDbs.length) {
+    const gooseEvents = readGooseUsageEvents({ sinceMs: Date.now() - 30 * 86400 * 1000 });
+    printDoctorLine('Goose reader', gooseEvents.length > 0, gooseEvents.length > 0
+      ? `${gooseEvents.length} recent usage event${gooseEvents.length === 1 ? '' : 's'} recognized from ${gooseDbs[0]}`
+      : `${gooseDbs[0]} exists but no non-zero numeric usage was recognized`);
+  }
+
   if (summary) {
     console.log(`  Spend summary       ${summary.todayCalls || 0} calls today / $${(summary.todayCost || 0).toFixed(4)}`);
   }
@@ -4067,6 +4075,63 @@ function readHermesUsageEvents({ sinceMs = 0 } = {}) {
   return hermesRowsToEvents(readHermesSessionRows(HERMES_STATE_DB), { sinceMs });
 }
 
+// ─── Goose: numeric usage ledger (messages are never queried) ───────────────
+function gooseDatabaseCandidates() {
+  const candidates = [];
+  const add = (path) => {
+    if (path && !candidates.includes(path)) candidates.push(path);
+  };
+  const root = process.env.GOOSE_PATH_ROOT;
+  if (root && isAbsolute(root)) add(join(root, 'data', 'sessions', 'sessions.db'));
+  add(join(homedir(), '.local', 'share', 'goose', 'sessions', 'sessions.db'));
+  add(join(homedir(), 'Library', 'Application Support', 'Block', 'goose', 'sessions', 'sessions.db'));
+  add(join(homedir(), 'Library', 'Application Support', 'Block', 'goose', 'data', 'sessions', 'sessions.db'));
+  add(join(homedir(), 'Library', 'Application Support', 'goose', 'sessions', 'sessions.db'));
+  if (process.env.APPDATA) add(join(process.env.APPDATA, 'Block', 'goose', 'data', 'sessions', 'sessions.db'));
+  return candidates;
+}
+
+function readGooseUsageRows(dbPath) {
+  if (!existsSync(dbPath)) return [];
+  try {
+    const sessionSchema = JSON.parse(execFileSync('sqlite3', [
+      '-readonly', '-json', dbPath, 'PRAGMA table_info(sessions)',
+    ], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }) || '[]');
+    const ledgerSchema = JSON.parse(execFileSync('sqlite3', [
+      '-readonly', '-json', dbPath, 'PRAGMA table_info(usage_ledger)',
+    ], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }) || '[]');
+    const query = buildGooseUsageQuery(
+      sessionSchema.map((column) => column.name).filter(Boolean),
+      ledgerSchema.map((column) => column.name).filter(Boolean),
+    );
+    const rows = JSON.parse(execFileSync('sqlite3', ['-readonly', '-json', dbPath, query], {
+      encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'],
+    }) || '[]');
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    // sqlite3 CLI unavailable or incompatible — try Node's built-in SQLite.
+  }
+  try {
+    const { DatabaseSync } = require('node:sqlite');
+    const db = new DatabaseSync(dbPath, { readOnly: true });
+    const sessionColumns = db.prepare('PRAGMA table_info(sessions)').all().map((column) => column.name).filter(Boolean);
+    const ledgerColumns = db.prepare('PRAGMA table_info(usage_ledger)').all().map((column) => column.name).filter(Boolean);
+    const rows = db.prepare(buildGooseUsageQuery(sessionColumns, ledgerColumns)).all();
+    db.close();
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
+function readGooseUsageEvents({ sinceMs = 0 } = {}) {
+  const events = [];
+  for (const dbPath of gooseDatabaseCandidates()) {
+    events.push(...gooseRowsToEvents(readGooseUsageRows(dbPath), { sinceMs }));
+  }
+  return events;
+}
+
 // ─── OpenHuman: active workspace cost ledger ────────────────────────────────
 // Discovery reads only OpenHuman's two tiny active-path markers, then the
 // numeric costs.jsonl ledger. It never opens memory, transcript, run-journal,
@@ -4317,6 +4382,9 @@ function collectLocalUsageEvents({ maxAgeMs, toolFilter = null, providerFilter =
   if (!toolFilter || toolFilter === 'hermes') {
     addEvents(readHermesUsageEvents({ sinceMs }));
   }
+  if (!toolFilter || toolFilter === 'goose') {
+    addEvents(readGooseUsageEvents({ sinceMs }));
+  }
   if (!toolFilter || toolFilter === 'openhuman') {
     addEvents(collectOpenHumanUsageEvents({ sinceMs }));
   }
@@ -4348,7 +4416,7 @@ function collectLocalUsageEvents({ maxAgeMs, toolFilter = null, providerFilter =
 
     // A tool-reported billed cost (e.g. Hermes actual_cost_usd) wins over
     // our estimate.
-    if (Number(event.totalCost) > 0) continue;
+    if (Number(event.totalCost) > 0 || event.costRecorded === true) continue;
     const disjoint = event.cachedDisjoint === false
       ? false
       : event.provider === 'anthropic' || event.cachedDisjoint === true;
@@ -4358,7 +4426,11 @@ function collectLocalUsageEvents({ maxAgeMs, toolFilter = null, providerFilter =
       event.outputTokens || 0,
       event.cachedTokens || 0,
       event.cacheCreationTokens || 0,
-      { cachedIncludedInInput: !disjoint }
+      {
+        cachedIncludedInInput: !disjoint,
+        cacheCreationIncludedInInput: event.cacheCreationIncludedInInput === true,
+        timestamp: event.timestamp,
+      }
     );
     event.inputCost = cost.inputCost;
     event.outputCost = cost.outputCost;
@@ -6440,7 +6512,7 @@ function printHelp() {
     tokimeter status             Show proxy status and cost summary
     tokimeter report             Zero-setup usage report from local logs (no proxy needed)
     tokimeter report --days=7 --tool claude --json
-    tokimeter report --tool opencode     Scope to one tool (also: claude, codex, grok, hermes, openhuman, cline, copilot, cursor)
+    tokimeter report --tool opencode     Scope to one tool (also: claude, codex, grok, goose, hermes, openhuman, cline, copilot, cursor)
     tokimeter report --provider xai      Roll up one provider across tools (for example Grok Build + Hermes xAI OAuth)
     tokimeter export --days=30 > usage.json   JSON export (loadable by the Pro dashboard)
     tokimeter report --md > report.md         Shareable Markdown report (also --html)

@@ -59,7 +59,7 @@ your device.
 Live-verified readers in this release: Claude Code CLI/Desktop, Codex
 CLI/Desktop, Cursor CLI/Desktop Agent, Grok Build, Hermes, opencode 1.17.18,
 and Cline CLI 3.0.39.
-OpenHuman, GitHub Copilot CLI, and Aider are fixture-tested but were not
+Goose, OpenHuman, GitHub Copilot CLI, and Aider are fixture-tested but were not
 completed as live requests during release testing. Paid
 Anthropic/OpenAI/Venice API routes are experimental and test-covered but were
 not exercised against paid APIs or reconciled with provider invoices.

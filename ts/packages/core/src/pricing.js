@@ -22,6 +22,7 @@ import { dirname, join } from 'node:path';
  * @property {string[]} aliases  - alternative names that map to this model
  * @property {boolean} [custom] - user-supplied local price
  * @property {boolean} [feed] - community-feed price
+ * @property {{ peakUtcHours: number[][], peak: { input: number, output: number, cached: number } }} [timeRates]
  */
 
 // ─── Prices ─────────────────────────────────────────────────────────────────
@@ -29,7 +30,7 @@ import { dirname, join } from 'node:path';
 /** @type {ModelPrice[]} */
 const PRICES = [
   // ─── OpenAI ───────────────────────────────────────────────────────────────
-  // Verified against developers.openai.com/api/docs/pricing, 2026-08-04.
+  // Verified against developers.openai.com/api/docs/pricing, 2026-08-21.
   // 5.6+ publishes explicit cache-write pricing at 1.25x input. o1-mini is no
   // longer listed and is kept at its last published rate for older usage.
   { provider: "openai", model: "gpt-5.6-sol",       input: 5.00,  output: 30.00, cached: 0.50,  cacheWrite: 6.25 },
@@ -55,7 +56,7 @@ const PRICES = [
   { provider: "openai", model: "gpt-3.5-turbo",    input: 0.50,  output: 1.50,  cached: 0 },
 
   // ─── Anthropic ────────────────────────────────────────────────────────────
-  // Verified against platform.claude.com pricing, 2026-08-04.
+  // Verified against platform.claude.com pricing, 2026-08-21.
   // cached = cache-read rate (~0.1x input); cacheWrite = 5-minute-TTL cache-write rate (~1.25x input).
   { provider: "anthropic", model: "claude-fable-5",          input: 10.00, output: 50.00, cached: 1.00, cacheWrite: 12.50,
     aliases: ["claude-mythos-5"] },
@@ -80,12 +81,14 @@ const PRICES = [
   { provider: "anthropic", model: "claude-3-haiku",          input: 0.25,  output: 1.25,  cached: 0 },
 
   // ─── Google Gemini ────────────────────────────────────────────────────────
-  // Verified against ai.google.dev/gemini-api/docs/pricing, 2026-08-04, at the
+  // Verified against ai.google.dev/gemini-api/docs/pricing, 2026-08-21, at the
   // short-context (<=200k) text tier, matching the convention used for OpenAI
   // above. Gemini prices audio input and >200k context higher; Tokimeter does
   // not model those tiers, so long-context and audio usage is under-valued
   // rather than guessed.
-  { provider: "google", model: "gemini-3.6-flash",        input: 1.50,  output: 7.50,  cached: 0.15 },
+  // Introductory rates apply through 2026-12-31; a dated CI guard prevents
+  // them from silently surviving the change to $1.50/$7.50 on 2027-01-01.
+  { provider: "google", model: "gemini-3.6-flash",        input: 0.75,  output: 3.75,  cached: 0.075 },
   { provider: "google", model: "gemini-3.5-flash",        input: 1.50,  output: 9.00,  cached: 0.15,
     aliases: ["gemini-3-flash"] },
   { provider: "google", model: "gemini-3.5-flash-lite",   input: 0.30,  output: 2.50,  cached: 0.03,
@@ -98,7 +101,7 @@ const PRICES = [
   { provider: "google", model: "gemini-2.5-flash-lite",   input: 0.10,  output: 0.40,  cached: 0.01 },
 
   // ─── Mistral ──────────────────────────────────────────────────────────────
-  // Verified against mistral.ai/pricing/api, 2026-08-04. The floating -latest
+  // Verified against mistral.ai/pricing/api, 2026-08-21. The floating -latest
   // aliases resolve to the current generation, so they are priced against it.
   // Mistral publishes cache-read at a 90% discount on input.
   { provider: "mistral", model: "mistral-large-3",        input: 0.50, output: 1.50, cached: 0.05,
@@ -110,6 +113,8 @@ const PRICES = [
   { provider: "mistral", model: "ministral-3-3b",         input: 0.10, output: 0.10, cached: 0.01 },
   { provider: "mistral", model: "ministral-3-8b",         input: 0.15, output: 0.15, cached: 0.015 },
   { provider: "mistral", model: "ministral-3-14b",        input: 0.20, output: 0.20, cached: 0.02 },
+  { provider: "mistral", model: "codestral",              input: 0.30, output: 0.90, cached: 0.03,
+    aliases: ["codestral-latest"] },
 
   // ─── Meta Llama ───────────────────────────────────────────────────────────
   // Intentionally unpriced. Meta publishes no generally available first-party
@@ -122,7 +127,7 @@ const PRICES = [
   //   tokimeter pricing set llama-4-maverick --input <in> --output <out>
 
   // ─── xAI Grok ─────────────────────────────────────────────────────────────
-  // Verified against docs.x.ai models pricing, 2026-08-04, at the <200k tier.
+  // Verified against docs.x.ai models pricing, 2026-08-21, at the <200k tier.
   // xAI publishes explicit cache-read rates; they were previously recorded as
   // unpriced. Models below grok-4.3 are no longer listed and keep their last
   // published rates for older tracked usage.
@@ -131,6 +136,8 @@ const PRICES = [
   // grok-build-0.1. No cached-input price published → cached tokens free.
   { provider: "xai", model: "grok-build",        input: 1.00, output: 2.00,  cached: 0.20,
     aliases: ["grok-build-0.1", "grok-build-b"] },
+  { provider: "xai", model: "grok-4.6",          input: 2.00, output: 6.00,  cached: 0.50,
+    aliases: ["grok-4.6-latest"] },
   // grok-4.5: docs.x.ai flagship (verified 2026-07-11); $2/$6, 500k context,
   // no cached-input price published → cached tokens free.
   { provider: "xai", model: "grok-4.5",          input: 2.00, output: 6.00,  cached: 0.30,
@@ -149,13 +156,13 @@ const PRICES = [
   { provider: "xai", model: "grok-2",            input: 2.00, output: 10.00, cached: 0 },
 
   // ─── DeepSeek ─────────────────────────────────────────────────────────────
-  // Verified against api-docs.deepseek.com/quick_start/pricing, 2026-08-04.
-  // DeepSeek has announced peak-hour pricing at 2x standard rates (09:00-12:00
-  // and 14:00-18:00 UTC+8) with no effective date published yet. Tokimeter
-  // prices the standard rate and does not model the peak multiplier, so peak
-  // usage is under-valued rather than guessed.
-  { provider: "deepseek", model: "deepseek-v4-flash",    input: 0.14,  output: 0.28, cached: 0.0028 },
-  { provider: "deepseek", model: "deepseek-v4-pro",      input: 0.435, output: 0.87, cached: 0.003625 },
+  // Verified against api-docs.deepseek.com/quick_start/pricing, 2026-08-21.
+  // Base fields are off-peak. priceCall selects the published 2x peak tier
+  // for calls from 01:00-04:00 and 06:00-10:00 UTC using the event timestamp.
+  { provider: "deepseek", model: "deepseek-v4-flash", input: 0.22, output: 0.66, cached: 0.007,
+    timeRates: { peakUtcHours: [[1, 4], [6, 10]], peak: { input: 0.44, output: 1.32, cached: 0.014 } } },
+  { provider: "deepseek", model: "deepseek-v4-pro", input: 0.66, output: 1.98, cached: 0.022,
+    timeRates: { peakUtcHours: [[1, 4], [6, 10]], peak: { input: 1.32, output: 3.96, cached: 0.044 } } },
 
   // ─── Cursor ───────────────────────────────────────────────────────────────
   // Composer 2.5 standard tier per cursor.com/docs/models-and-pricing
@@ -164,10 +171,24 @@ const PRICES = [
   { provider: "cursor", model: "composer-2.5", input: 0.50, output: 2.50, cached: 0.20 },
 
   // ─── Z.AI (GLM) ───────────────────────────────────────────────────────────
-  // glm-5.2: docs.z.ai pricing $1.40 in / $0.26 cached / $4.40 out
-  // (verified 2026-07-08). Cursor pricing docs list Composer 2.5 standard
+  // Current text-model rates verified against docs.z.ai pricing, 2026-08-21.
+  // Cursor pricing docs list Composer 2.5 standard
   // separately; see the xai block for the fast tier used by Grok Build.
   { provider: "zai", model: "glm-5.2",       input: 1.40, output: 4.40, cached: 0.26 },
+  { provider: "zai", model: "glm-5.3",       input: 1.40, output: 4.40, cached: 0.26 },
+  { provider: "zai", model: "glm-5.1",       input: 1.40, output: 4.40, cached: 0.26 },
+  { provider: "zai", model: "glm-5",         input: 1.00, output: 3.20, cached: 0.20 },
+  { provider: "zai", model: "glm-5-turbo",   input: 1.20, output: 4.00, cached: 0.24 },
+  { provider: "zai", model: "glm-4.7",       input: 0.60, output: 2.20, cached: 0.11 },
+  { provider: "zai", model: "glm-4.7-flashx", input: 0.07, output: 0.40, cached: 0.01 },
+  { provider: "zai", model: "glm-4.6",       input: 0.60, output: 2.20, cached: 0.11 },
+  { provider: "zai", model: "glm-4.5",       input: 0.60, output: 2.20, cached: 0.11 },
+  { provider: "zai", model: "glm-4.5-x",     input: 2.20, output: 8.90, cached: 0.45 },
+  { provider: "zai", model: "glm-4.5-air",   input: 0.20, output: 1.10, cached: 0.03 },
+  { provider: "zai", model: "glm-4.5-airx",  input: 1.10, output: 4.50, cached: 0.22 },
+  { provider: "zai", model: "glm-4-32b-0414-128k", input: 0.10, output: 0.10, cached: 0 },
+  { provider: "zai", model: "glm-4.7-flash", input: 0, output: 0, cached: 0 },
+  { provider: "zai", model: "glm-4.5-flash", input: 0, output: 0, cached: 0 },
   { provider: "zai", model: "glm-5-plus",    input: 0.70, output: 2.80, cached: 0 },
   { provider: "zai", model: "glm-5-air",     input: 0.10, output: 0.40, cached: 0 },
   { provider: "zai", model: "glm-5-flash",   input: 0.10, output: 0.10, cached: 0 },
@@ -246,8 +267,9 @@ const DOWNGRADES = {
  * @param {number} outputTokens
  * @param {number} cachedTokens - cache-read tokens
  * @param {number} cacheCreationTokens - cache-write tokens (Anthropic reports these separately)
- * @param {{ cachedIncludedInInput?: boolean }} [options] - OpenAI/Google report inputTokens inclusive of
- *   cached tokens; Anthropic reports input/cache-read/cache-write as disjoint buckets.
+ * @param {{ cachedIncludedInInput?: boolean, cacheCreationIncludedInInput?: boolean, timestamp?: number }} [options]
+ *   Some ledgers report cache buckets as subsets of inputTokens. timestamp is
+ *   used for providers such as DeepSeek whose published rate varies by UTC hour.
  * @returns {{
  *   inputCost: number,
  *   outputCost: number,
@@ -258,14 +280,19 @@ const DOWNGRADES = {
  *   authoritative: boolean
  * }}
  */
-export function priceCall(model, inputTokens = 0, outputTokens = 0, cachedTokens = 0, cacheCreationTokens = 0, { cachedIncludedInInput = true } = {}) {
-  const price = lookupPrice(model);
+export function priceCall(model, inputTokens = 0, outputTokens = 0, cachedTokens = 0, cacheCreationTokens = 0, {
+  cachedIncludedInInput = true,
+  cacheCreationIncludedInInput = false,
+  timestamp = Date.now(),
+} = {}) {
+  const basePrice = lookupPrice(model);
 
-  if (!price) {
+  if (!basePrice) {
     // Unknown models are deliberately unpriced in authoritative totals. Keep
     // the old $2/$8 heuristic only as an explicitly separate rough estimate.
     const internal = knownInternalUnpriced(model);
-    const inCost = ((inputTokens + cacheCreationTokens) / 1_000_000) * 2.0;
+    const roughInput = inputTokens + (cacheCreationIncludedInInput ? 0 : cacheCreationTokens);
+    const inCost = (roughInput / 1_000_000) * 2.0;
     const outCost = (outputTokens / 1_000_000) * 8.0;
     return {
       inputCost: 0,
@@ -278,7 +305,10 @@ export function priceCall(model, inputTokens = 0, outputTokens = 0, cachedTokens
     };
   }
 
-  const billableInput = cachedIncludedInInput ? Math.max(0, inputTokens - cachedTokens) : inputTokens;
+  const price = priceForTimestamp(basePrice, timestamp);
+  const includedCache = (cachedIncludedInInput ? cachedTokens : 0)
+    + (cacheCreationIncludedInInput ? cacheCreationTokens : 0);
+  const billableInput = Math.max(0, inputTokens - includedCache);
   let inCost = (billableInput / 1_000_000) * price.input;
 
   if (cachedTokens > 0 && price.cached > 0) {
@@ -303,6 +333,16 @@ export function priceCall(model, inputTokens = 0, outputTokens = 0, cachedTokens
     pricingSource: price.custom ? 'custom' : (price.feed ? 'community' : 'verified'),
     authoritative: true,
   };
+}
+
+function priceForTimestamp(price, timestamp) {
+  const timeRates = price.timeRates;
+  if (!timeRates?.peak || !Array.isArray(timeRates.peakUtcHours)) return price;
+  const date = new Date(Number(timestamp));
+  if (Number.isNaN(date.getTime())) return price;
+  const hour = date.getUTCHours();
+  const peak = timeRates.peakUtcHours.some(([start, end]) => hour >= start && hour < end);
+  return peak ? { ...price, ...timeRates.peak, pricingTier: 'peak' } : price;
 }
 
 /**
@@ -507,6 +547,20 @@ function mergePrices(builtIn, custom) {
 
 function normalizePrice(price) {
   if (!price || !price.model) return null;
+  const peak = price.timeRates?.peak;
+  const peakUtcHours = price.timeRates?.peakUtcHours;
+  const timeRates = peak && Array.isArray(peakUtcHours)
+    ? {
+        peakUtcHours: peakUtcHours
+          .filter((range) => Array.isArray(range) && range.length === 2)
+          .map(([start, end]) => [Number(start), Number(end)]),
+        peak: {
+          input: Number(peak.input) || 0,
+          output: Number(peak.output) || 0,
+          cached: Number(peak.cached) || 0,
+        },
+      }
+    : undefined;
   return {
     provider: String(price.provider || 'custom'),
     model: String(price.model),
@@ -517,6 +571,7 @@ function normalizePrice(price) {
     aliases: Array.isArray(price.aliases) ? price.aliases.map(String) : [],
     custom: Boolean(price.custom),
     feed: Boolean(price.feed),
+    ...(timeRates ? { timeRates } : {}),
   };
 }
 

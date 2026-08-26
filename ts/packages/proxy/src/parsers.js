@@ -912,6 +912,147 @@ export function hermesRowsToEvents(rows, { sinceMs = 0 } = {}) {
   return events;
 }
 
+// ─── Goose usage ledger → usage events ─────────────────────────────────────
+// Goose 1.10+ stores per-call numeric usage in usage_ledger. Tokimeter never
+// queries the messages table: prompts, responses, and tool output stay out of
+// scope. Older/migrated sessions with no ledger rows fall back to the numeric
+// accumulated totals on sessions, so the two sources cannot double-count.
+
+function gooseColumn(columns, name, fallback = 'NULL', table = '') {
+  const available = new Set(Array.from(columns || [], (column) => String(column)));
+  return available.has(name) ? `${table ? `${table}.` : ''}"${name}"` : fallback;
+}
+
+export function buildGooseUsageQuery(sessionColumns = [], ledgerColumns = []) {
+  const s = (name, fallback = 'NULL') => gooseColumn(sessionColumns, name, fallback, 's');
+  const u = (name, fallback = 'NULL') => gooseColumn(ledgerColumns, name, fallback, 'u');
+  const sessionModel = sessionColumns.includes('model_config_json')
+    ? `CASE WHEN json_valid(${s('model_config_json')}) THEN json_extract(${s('model_config_json')}, '$.model_name') END`
+    : "''";
+  const sessionTimestamp = sessionColumns.includes('updated_at')
+    ? `COALESCE(CAST(strftime('%s', ${s('updated_at')}) AS INTEGER), CAST(${s('updated_at')} AS INTEGER), 0)`
+    : '0';
+  const hasLedger = ledgerColumns.includes('session_id') && sessionColumns.includes('id');
+
+  const sessionSelect = `SELECT
+    'session' AS record_kind,
+    ${s('id', "''")} AS record_id,
+    ${s('id', "''")} AS session_id,
+    ${sessionTimestamp} AS created_timestamp,
+    COALESCE(${sessionModel}, 'unknown') AS model,
+    ${s('provider_name', "''")} AS provider_name,
+    ${s('accumulated_input_tokens', s('input_tokens', '0'))} AS input_tokens,
+    ${s('accumulated_output_tokens', s('output_tokens', '0'))} AS output_tokens,
+    ${s('accumulated_total_tokens', s('total_tokens', '0'))} AS total_tokens,
+    ${s('accumulated_cache_read_tokens', s('cache_read_tokens', '0'))} AS cache_read_tokens,
+    ${s('accumulated_cache_write_tokens', s('cache_write_tokens', '0'))} AS cache_write_tokens,
+    ${s('accumulated_cost')} AS cost,
+    'estimated' AS cost_source,
+    0 AS is_compaction,
+    ${s('working_dir')} AS working_dir,
+    ${s('session_type', "''")} AS session_type,
+    ${s('parent_session_id')} AS parent_session_id
+  FROM sessions s${hasLedger ? ` WHERE NOT EXISTS (SELECT 1 FROM usage_ledger u WHERE u.session_id = s.id)` : ''}`;
+
+  if (!hasLedger) return sessionSelect;
+  return `SELECT
+    'ledger' AS record_kind,
+    ${u('id', "''")} AS record_id,
+    ${u('session_id', "''")} AS session_id,
+    ${u('created_timestamp', '0')} AS created_timestamp,
+    COALESCE(${u('model')}, ${sessionModel}, 'unknown') AS model,
+    ${s('provider_name', "''")} AS provider_name,
+    ${u('input_tokens', '0')} AS input_tokens,
+    ${u('output_tokens', '0')} AS output_tokens,
+    ${u('total_tokens', '0')} AS total_tokens,
+    ${u('cache_read_tokens', '0')} AS cache_read_tokens,
+    ${u('cache_write_tokens', '0')} AS cache_write_tokens,
+    ${u('cost')} AS cost,
+    ${u('cost_source')} AS cost_source,
+    ${u('is_compaction', '0')} AS is_compaction,
+    ${s('working_dir')} AS working_dir,
+    ${s('session_type', "''")} AS session_type,
+    ${s('parent_session_id')} AS parent_session_id
+  FROM usage_ledger u JOIN sessions s ON s.id = u.session_id
+  UNION ALL
+  ${sessionSelect}`;
+}
+
+function gooseProviderFor(providerName, model) {
+  const direct = String(providerName || '').trim().toLowerCase();
+  const known = {
+    anthropic: 'anthropic', openai: 'openai', google: 'google', gemini: 'google',
+    xai: 'xai', deepseek: 'deepseek', mistral: 'mistral', zai: 'zai',
+  };
+  if (known[direct]) return known[direct];
+  const m = String(model || '').toLowerCase().split('/').pop();
+  if (m.startsWith('claude')) return 'anthropic';
+  if (m.startsWith('gemini')) return 'google';
+  if (m.startsWith('grok') || m.startsWith('composer')) return 'xai';
+  if (m.startsWith('deepseek')) return 'deepseek';
+  if (m.startsWith('mistral') || m.startsWith('ministral') || m.startsWith('codestral')) return 'mistral';
+  if (m.startsWith('glm')) return 'zai';
+  if (m.startsWith('gpt') || /^o\d/.test(m)) return 'openai';
+  return direct || 'unknown';
+}
+
+export function gooseRowsToEvents(rows, { sinceMs = 0 } = {}) {
+  const events = [];
+  for (const row of rows || []) {
+    const rawTimestamp = Number(row.created_timestamp) || 0;
+    const timestamp = rawTimestamp > 10_000_000_000 ? rawTimestamp : rawTimestamp * 1000;
+    if (!timestamp || (sinceMs && timestamp < sinceMs)) continue;
+    const inputTokens = Math.max(0, Number(row.input_tokens) || 0);
+    const outputTokens = Math.max(0, Number(row.output_tokens) || 0);
+    const cachedTokens = Math.max(0, Number(row.cache_read_tokens) || 0);
+    const cacheCreationTokens = Math.max(0, Number(row.cache_write_tokens) || 0);
+    const numericCost = Number(row.cost);
+    const totalCost = Math.max(0, numericCost || 0);
+    if (!(inputTokens || outputTokens || cachedTokens || cacheCreationTokens || totalCost)) continue;
+
+    const model = String(row.model || 'unknown');
+    const providerName = String(row.provider_name || '').trim().toLowerCase();
+    const costSource = String(row.cost_source || '').trim().toLowerCase();
+    const reported = costSource === 'provider_reported';
+    const costRecorded = row.cost !== null && row.cost !== undefined
+      && Number.isFinite(numericCost) && numericCost >= 0
+      && ['provider_reported', 'estimated', 'carried_forward'].includes(costSource);
+    const recordKind = row.record_kind === 'ledger' ? 'ledger' : 'session';
+    const isSubagent = String(row.session_type || '').toLowerCase() === 'sub_agent';
+    events.push({
+      timestamp,
+      provider: gooseProviderFor(providerName, model),
+      model,
+      inputTokens,
+      outputTokens,
+      cachedTokens,
+      cacheCreationTokens,
+      // Goose documents both cache buckets as subsets of input_tokens.
+      cachedDisjoint: false,
+      cacheCreationIncludedInInput: true,
+      ended: true,
+      latencyMs: 0,
+      success: true,
+      tool: 'goose',
+      source: `goose-${recordKind}`,
+      confidence: recordKind === 'ledger' ? 'exact' : 'imported',
+      pricingConfidence: costRecorded ? (reported ? 'reported' : 'estimated') : getPricingSource(model).confidence,
+      ...(costRecorded ? { totalCost, costSource, costRecorded: true } : {}),
+      ...(providerName ? { billingProvider: providerName } : {}),
+      ...(row.working_dir ? { cwd: String(row.working_dir) } : {}),
+      sessionId: String(row.session_id || ''),
+      externalId: `goose-${recordKind}:${row.record_id || `${row.session_id}:${timestamp}`}`,
+      note: recordKind === 'ledger'
+        ? 'Imported from Goose numeric usage ledger; message content was not read.'
+        : 'Imported from Goose numeric session totals; message content was not read.',
+      ...(Number(row.is_compaction) ? { effort: 'compaction' } : {}),
+      ...(isSubagent ? { role: 'worker' } : {}),
+      ...(row.parent_session_id ? { parentSessionId: String(row.parent_session_id) } : {}),
+    });
+  }
+  return events;
+}
+
 // ─── Delegation report (director vs worker economics) ───────────────────────
 // Attribution sources, per tool (see docs/BUILD_PLAN.md coverage matrix):
 //   claude-code — per-turn: events with role='worker' are subagent turns;

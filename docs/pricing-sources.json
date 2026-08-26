@@ -7,22 +7,22 @@
       "label": "OpenAI",
       "source": "developers.openai.com/api/docs/pricing",
       "url": "https://developers.openai.com/api/docs/pricing",
-      "verified": "2026-08-04",
+      "verified": "2026-08-21",
       "note": "Standard (non-batch) text rates. o1-mini and gpt-4-turbo are no longer listed and keep their last published rates for older tracked usage."
     },
     "anthropic": {
       "label": "Anthropic",
       "source": "platform.claude.com pricing",
       "url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified": "2026-08-04",
+      "verified": "2026-08-21",
       "note": "Cache read is 0.1x input; cache write is the 5-minute-TTL rate at 1.25x input. Re-verified with no changes."
     },
     "xai": {
       "label": "xAI",
       "source": "docs.x.ai models pricing",
       "url": "https://docs.x.ai/docs/models",
-      "verified": "2026-08-04",
-      "note": "Rates use the <200k context tier; xAI charges double above it and that tier is not modeled. Models below grok-4.3 are no longer listed and keep their last published rates."
+      "verified": "2026-08-21",
+      "note": "Rates use the <200k context tier; xAI charges more above it and that tier is not modeled. Grok 4.6 was added from the current model page. Delisted models keep their last published rates for older usage."
     },
     "cursor": {
       "label": "Cursor",
@@ -39,22 +39,22 @@
       "label": "Z.AI",
       "source": "docs.z.ai pricing",
       "url": "https://docs.z.ai/guides/overview/pricing",
-      "verified": "2026-08-04",
-      "note": "glm-5.2 verified. The other GLM entries are no longer listed and keep their last published rates for older tracked usage."
+      "verified": "2026-08-21",
+      "note": "Current text-model rates through GLM-5.3 are verified. Older GLM entries no longer listed keep their last published rates for historical usage."
     },
     "google": {
       "label": "Google",
       "source": "ai.google.dev Gemini API pricing",
       "url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified": "2026-08-04",
-      "note": "Short-context (<=200k) text tier. Gemini prices audio input and >200k context higher; those tiers are not modeled, so such usage is under-valued rather than guessed."
+      "verified": "2026-08-21",
+      "note": "Short-context (<=200k) text tier. Gemini 3.6 Flash uses its introductory rate through 2026-12-31. Audio and >200k tiers are not modeled, so such usage is under-valued rather than guessed."
     },
     "mistral": {
       "label": "Mistral",
       "source": "mistral.ai/pricing/api",
       "url": "https://mistral.ai/pricing/api/",
-      "verified": "2026-08-04",
-      "note": "The floating -latest aliases are priced against the current generation they resolve to. Cache read is Mistral's published 90 percent discount."
+      "verified": "2026-08-21",
+      "note": "The floating -latest aliases are priced against the current generation they resolve to. Codestral is listed again at its current published rate. Cache read is Mistral's published 90 percent discount."
     },
     "meta": {
       "label": "Meta",
@@ -67,8 +67,8 @@
       "label": "DeepSeek",
       "source": "api-docs.deepseek.com pricing",
       "url": "https://api-docs.deepseek.com/quick_start/pricing",
-      "verified": "2026-08-04",
-      "note": "Standard rates. Announced peak-hour pricing at 2x has no published effective date and is not modeled, so peak usage is under-valued rather than guessed."
+      "verified": "2026-08-21",
+      "note": "Off-peak and peak rates effective 2026-08-16. Tokimeter selects the published peak tier for 01:00-04:00 and 06:00-10:00 UTC from each event timestamp; all other hours use off-peak."
     }
   },
   "scheduledChanges": [
@@ -81,6 +81,16 @@
         "output": 15.0,
         "cached": 0.3,
         "cacheWrite": 3.75
+      }
+    },
+    {
+      "model": "gemini-3.6-flash",
+      "effective": "2027-01-01",
+      "note": "Introductory $0.75 input / $3.75 output applies through 2026-12-31, then changes to $1.50 / $7.50 with cache read $0.15.",
+      "expectedAfter": {
+        "input": 1.5,
+        "output": 7.5,
+        "cached": 0.15
       }
     }
   ]
