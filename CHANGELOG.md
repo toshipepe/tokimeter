@@ -5,6 +5,8 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+## 0.7.0 — 2026-08-27
+
 ### Added
 
 - Add `tokimeter advisor`, a deterministic local shortlist of ranked actions
