@@ -23,6 +23,7 @@ import { dirname, join } from 'node:path';
  * @property {boolean} [custom] - user-supplied local price
  * @property {boolean} [feed] - community-feed price
  * @property {{ peakUtcHours: number[][], peak: { input: number, output: number, cached: number } }} [timeRates]
+ * @property {{ thresholdInputTokens: number, inputMultiplier: number, outputMultiplier: number, cacheMultiplier: number }} [longContext]
  */
 
 // ─── Prices ─────────────────────────────────────────────────────────────────
@@ -30,14 +31,25 @@ import { dirname, join } from 'node:path';
 /** @type {ModelPrice[]} */
 const PRICES = [
   // ─── OpenAI ───────────────────────────────────────────────────────────────
-  // Verified against developers.openai.com/api/docs/pricing, 2026-08-21.
-  // 5.6+ publishes explicit cache-write pricing at 1.25x input. o1-mini is no
-  // longer listed and is kept at its last published rate for older usage.
-  { provider: "openai", model: "gpt-5.6-sol",       input: 5.00,  output: 30.00, cached: 0.50,  cacheWrite: 6.25 },
-  { provider: "openai", model: "gpt-5.6-terra",     input: 2.00,  output: 12.00, cached: 0.20,  cacheWrite: 2.50 },
-  { provider: "openai", model: "gpt-5.6-luna",      input: 0.20,  output: 1.20,  cached: 0.02,  cacheWrite: 0.25 },
-  { provider: "openai", model: "gpt-5.5",           input: 5.00,  output: 30.00, cached: 0.50 },
-  { provider: "openai", model: "gpt-5.4",           input: 2.50,  output: 15.00, cached: 0.25 },
+  // Verified against developers.openai.com/api/docs/pricing and model pages,
+  // 2026-09-12. These 1.05M-context models charge 2x input/cache and 1.5x
+  // output for the full request above 272K input tokens. 5.6+ publishes
+  // explicit cache-write pricing at 1.25x input. o1-mini is no longer listed
+  // and is kept at its last published rate for older usage.
+  { provider: "openai", model: "gpt-6-astra",         input: 10.00, output: 50.00, cached: 1.00,  cacheWrite: 12.50,
+    longContext: { thresholdInputTokens: 272_000, inputMultiplier: 2, outputMultiplier: 1.5, cacheMultiplier: 2 } },
+  { provider: "openai", model: "gpt-5.6-sol",         input: 4.00,  output: 20.00, cached: 0.40,  cacheWrite: 5.00,
+    aliases: ["gpt-5.6", "gpt-daybreak-blue-latest"], longContext: { thresholdInputTokens: 272_000, inputMultiplier: 2, outputMultiplier: 1.5, cacheMultiplier: 2 } },
+  { provider: "openai", model: "gpt-5.6-cyber",       input: 12.50, output: 75.00, cached: 1.25,  cacheWrite: 15.625,
+    aliases: ["gpt-daybreak-red-latest"], longContext: { thresholdInputTokens: 272_000, inputMultiplier: 2, outputMultiplier: 1.5, cacheMultiplier: 2 } },
+  { provider: "openai", model: "gpt-5.6-terra",       input: 2.00,  output: 12.00, cached: 0.20,  cacheWrite: 2.50,
+    longContext: { thresholdInputTokens: 272_000, inputMultiplier: 2, outputMultiplier: 1.5, cacheMultiplier: 2 } },
+  { provider: "openai", model: "gpt-5.6-luna",        input: 0.20,  output: 1.20,  cached: 0.02,  cacheWrite: 0.25,
+    longContext: { thresholdInputTokens: 272_000, inputMultiplier: 2, outputMultiplier: 1.5, cacheMultiplier: 2 } },
+  { provider: "openai", model: "gpt-5.5",             input: 5.00,  output: 30.00, cached: 0.50,
+    longContext: { thresholdInputTokens: 272_000, inputMultiplier: 2, outputMultiplier: 1.5, cacheMultiplier: 2 } },
+  { provider: "openai", model: "gpt-5.4",             input: 2.50,  output: 15.00, cached: 0.25,
+    longContext: { thresholdInputTokens: 272_000, inputMultiplier: 2, outputMultiplier: 1.5, cacheMultiplier: 2 } },
   { provider: "openai", model: "gpt-5.4-mini",      input: 0.75,  output: 4.50,  cached: 0.075 },
   { provider: "openai", model: "gpt-5.3-codex",     input: 1.75,  output: 14.00, cached: 0.175 },
   { provider: "openai", model: "gpt-4o",            input: 2.50,  output: 10.00, cached: 1.25,
@@ -56,15 +68,18 @@ const PRICES = [
   { provider: "openai", model: "gpt-3.5-turbo",    input: 0.50,  output: 1.50,  cached: 0 },
 
   // ─── Anthropic ────────────────────────────────────────────────────────────
-  // Verified against platform.claude.com pricing, 2026-08-21.
+  // Verified against platform.claude.com pricing, 2026-09-12.
   // cached = cache-read rate (~0.1x input); cacheWrite = 5-minute-TTL cache-write rate (~1.25x input).
+  // Fable/Mythos 5.1 are the exception: their cache-read rate is 0.025x input.
+  { provider: "anthropic", model: "claude-fable-5-1",        input: 10.00, output: 50.00, cached: 0.25, cacheWrite: 12.50,
+    aliases: ["claude-mythos-5-1"] },
   { provider: "anthropic", model: "claude-fable-5",          input: 10.00, output: 50.00, cached: 1.00, cacheWrite: 12.50,
     aliases: ["claude-mythos-5"] },
   { provider: "anthropic", model: "claude-opus-5",           input: 5.00,  output: 25.00, cached: 0.50, cacheWrite: 6.25 },
   { provider: "anthropic", model: "claude-opus-4-8",         input: 5.00,  output: 25.00, cached: 0.50, cacheWrite: 6.25,
     aliases: ["claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5", "claude-opus-4-5-20251101"] },
-  // Sonnet 5 sticker price is $3/$15; introductory $2/$10 applies through 2026-08-31 — using intro
-  // rates now so tracked spend matches actual billing. Revert to 3.00/15.00 after 2026-08-31.
+  // Anthropic made Sonnet 5's introductory $2/$10 rate permanent and canceled
+  // the previously announced 2026-09-01 increase.
   { provider: "anthropic", model: "claude-sonnet-5",         input: 2.00,  output: 10.00, cached: 0.20, cacheWrite: 2.50 },
   { provider: "anthropic", model: "claude-sonnet-4-6",       input: 3.00,  output: 15.00, cached: 0.30, cacheWrite: 3.75,
     aliases: ["claude-sonnet-4-5", "claude-sonnet-4-5-20250929"] },
@@ -234,10 +249,13 @@ for (const p of ALL_PRICES) {
  * quality = expected quality retention (0-1)
  */
 const DOWNGRADES = {
+  "gpt-6-astra":          [{ model: "gpt-5.6-sol", quality: 0.95 }, { model: "gpt-5.6-terra", quality: 0.9 }],
+  "gpt-5.6-cyber":        [{ model: "gpt-5.6-sol", quality: 0.9 }],
   "gpt-5.6-sol":        [{ model: "gpt-5.6-terra", quality: 0.95 }, { model: "gpt-5.6-luna", quality: 0.85 }],
   "gpt-5.6-terra":      [{ model: "gpt-5.6-luna", quality: 0.9 }],
   "gpt-5.5":            [{ model: "gpt-5.4", quality: 0.95 }, { model: "gpt-5.4-mini", quality: 0.85 }],
   "gpt-5.4":            [{ model: "gpt-5.4-mini", quality: 0.9 }],
+  "claude-fable-5-1":   [{ model: "claude-opus-5", quality: 0.97 }, { model: "claude-sonnet-5", quality: 0.9 }],
   "claude-fable-5":     [{ model: "claude-opus-4-8", quality: 0.97 }, { model: "claude-sonnet-5", quality: 0.9 }],
   "claude-opus-4-8":    [{ model: "claude-sonnet-5", quality: 0.95 }, { model: "claude-haiku-4-5", quality: 0.85 }],
   "claude-sonnet-5":    [{ model: "claude-haiku-4-5", quality: 0.88 }],
@@ -305,7 +323,10 @@ export function priceCall(model, inputTokens = 0, outputTokens = 0, cachedTokens
     };
   }
 
-  const price = priceForTimestamp(basePrice, timestamp);
+  const promptInputTokens = inputTokens
+    + (cachedIncludedInInput ? 0 : cachedTokens)
+    + (cacheCreationIncludedInInput ? 0 : cacheCreationTokens);
+  const price = priceForCall(basePrice, timestamp, promptInputTokens);
   const includedCache = (cachedIncludedInInput ? cachedTokens : 0)
     + (cacheCreationIncludedInInput ? cacheCreationTokens : 0);
   const billableInput = Math.max(0, inputTokens - includedCache);
@@ -335,14 +356,30 @@ export function priceCall(model, inputTokens = 0, outputTokens = 0, cachedTokens
   };
 }
 
-function priceForTimestamp(price, timestamp) {
+function priceForCall(price, timestamp, promptInputTokens) {
+  let selected = price;
   const timeRates = price.timeRates;
-  if (!timeRates?.peak || !Array.isArray(timeRates.peakUtcHours)) return price;
-  const date = new Date(Number(timestamp));
-  if (Number.isNaN(date.getTime())) return price;
-  const hour = date.getUTCHours();
-  const peak = timeRates.peakUtcHours.some(([start, end]) => hour >= start && hour < end);
-  return peak ? { ...price, ...timeRates.peak, pricingTier: 'peak' } : price;
+  if (timeRates?.peak && Array.isArray(timeRates.peakUtcHours)) {
+    const date = new Date(Number(timestamp));
+    if (!Number.isNaN(date.getTime())) {
+      const hour = date.getUTCHours();
+      const peak = timeRates.peakUtcHours.some(([start, end]) => hour >= start && hour < end);
+      if (peak) selected = { ...selected, ...timeRates.peak, pricingTier: 'peak' };
+    }
+  }
+
+  const tier = price.longContext;
+  if (tier && promptInputTokens > tier.thresholdInputTokens) {
+    selected = {
+      ...selected,
+      input: selected.input * tier.inputMultiplier,
+      output: selected.output * tier.outputMultiplier,
+      cached: selected.cached * tier.cacheMultiplier,
+      cacheWrite: selected.cacheWrite * tier.cacheMultiplier,
+      pricingTier: 'long-context',
+    };
+  }
+  return selected;
 }
 
 /**
@@ -561,6 +598,15 @@ function normalizePrice(price) {
         },
       }
     : undefined;
+  const rawLongContext = price.longContext;
+  const longContext = rawLongContext && Number(rawLongContext.thresholdInputTokens) > 0
+    ? {
+        thresholdInputTokens: Number(rawLongContext.thresholdInputTokens),
+        inputMultiplier: Number(rawLongContext.inputMultiplier) || 1,
+        outputMultiplier: Number(rawLongContext.outputMultiplier) || 1,
+        cacheMultiplier: Number(rawLongContext.cacheMultiplier) || 1,
+      }
+    : undefined;
   return {
     provider: String(price.provider || 'custom'),
     model: String(price.model),
@@ -572,6 +618,7 @@ function normalizePrice(price) {
     custom: Boolean(price.custom),
     feed: Boolean(price.feed),
     ...(timeRates ? { timeRates } : {}),
+    ...(longContext ? { longContext } : {}),
   };
 }
 

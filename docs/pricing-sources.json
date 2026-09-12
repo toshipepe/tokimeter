@@ -7,15 +7,15 @@
       "label": "OpenAI",
       "source": "developers.openai.com/api/docs/pricing",
       "url": "https://developers.openai.com/api/docs/pricing",
-      "verified": "2026-08-21",
-      "note": "Standard (non-batch) text rates. o1-mini and gpt-4-turbo are no longer listed and keep their last published rates for older tracked usage."
+      "verified": "2026-09-12",
+      "note": "Standard (non-batch) text rates. GPT-6 Astra and GPT-5.6 Cyber were added; Daybreak Blue and Red resolve to their documented Sol and Cyber aliases. GPT-5.6 Sol's promotional $4/$20 rate is available at least through 2026-11-21. For Astra, GPT-5.6, GPT-5.5, and GPT-5.4, Tokimeter applies the published 2x input/cache and 1.5x output tier to the full request above 272K input tokens. o1-mini and gpt-4-turbo are no longer listed and keep their last published rates for older tracked usage."
     },
     "anthropic": {
       "label": "Anthropic",
       "source": "platform.claude.com pricing",
       "url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified": "2026-08-21",
-      "note": "Cache read is 0.1x input; cache write is the 5-minute-TTL rate at 1.25x input. Re-verified with no changes."
+      "verified": "2026-09-12",
+      "note": "Cache read is normally 0.1x input and 5-minute cache write is 1.25x input. Fable 5.1 and Mythos 5.1 use the published lower 0.025x cache-read rate. Anthropic made Sonnet 5's $2/$10 introductory rate permanent and canceled the previously announced September increase."
     },
     "xai": {
       "label": "xAI",
@@ -72,17 +72,6 @@
     }
   },
   "scheduledChanges": [
-    {
-      "model": "claude-sonnet-5",
-      "effective": "2026-08-31",
-      "note": "Introductory $2 input / $10 output applies through 2026-08-31, then reverts to $3 / $15 with cache read $0.30 and 5-minute cache write $3.75.",
-      "expectedAfter": {
-        "input": 3.0,
-        "output": 15.0,
-        "cached": 0.3,
-        "cacheWrite": 3.75
-      }
-    },
     {
       "model": "gemini-3.6-flash",
       "effective": "2027-01-01",

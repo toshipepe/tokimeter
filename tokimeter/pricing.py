@@ -25,19 +25,41 @@ class ModelPrice:
     peak_input_per_1m: float = 0.0
     peak_output_per_1m: float = 0.0
     peak_cached_input_per_1m: float = 0.0
+    long_context_threshold: int = 0
+    long_context_input_multiplier: float = 1.0
+    long_context_output_multiplier: float = 1.0
+    long_context_cache_multiplier: float = 1.0
 
 
 # ─── OpenAI ─────────────────────────────────────────────────────────────────
 
 OPENAI_PRICES = [
-    # Verified against developers.openai.com/api/docs/pricing, 2026-08-21.
-    # 5.6+ publishes explicit cache-write pricing at 1.25x input. o1-mini is no
-    # longer listed and keeps its last published rate for older usage.
-    ModelPrice("openai", "gpt-5.6-sol",       5.00,  30.00, 0.50,  (), 6.25),
-    ModelPrice("openai", "gpt-5.6-terra",     2.00,  12.00, 0.20,  (), 2.50),
-    ModelPrice("openai", "gpt-5.6-luna",      0.20,   1.20, 0.02,  (), 0.25),
-    ModelPrice("openai", "gpt-5.5",           5.00,  30.00, 0.50),
-    ModelPrice("openai", "gpt-5.4",           2.50,  15.00, 0.25),
+    # Verified against developers.openai.com/api/docs/pricing and model pages,
+    # 2026-09-12. The trailing values model the published >272K input tier:
+    # 2x input/cache and 1.5x output for the full request.
+    ModelPrice("openai", "gpt-6-astra",       10.00, 50.00, 1.00, (), 12.50,
+               long_context_threshold=272_000, long_context_input_multiplier=2,
+               long_context_output_multiplier=1.5, long_context_cache_multiplier=2),
+    ModelPrice("openai", "gpt-5.6-sol",        4.00, 20.00, 0.40,
+               ("gpt-5.6", "gpt-daybreak-blue-latest"), 5.00,
+               long_context_threshold=272_000, long_context_input_multiplier=2,
+               long_context_output_multiplier=1.5, long_context_cache_multiplier=2),
+    ModelPrice("openai", "gpt-5.6-cyber",      12.50, 75.00, 1.25,
+               ("gpt-daybreak-red-latest",), 15.625,
+               long_context_threshold=272_000, long_context_input_multiplier=2,
+               long_context_output_multiplier=1.5, long_context_cache_multiplier=2),
+    ModelPrice("openai", "gpt-5.6-terra",      2.00, 12.00, 0.20, (), 2.50,
+               long_context_threshold=272_000, long_context_input_multiplier=2,
+               long_context_output_multiplier=1.5, long_context_cache_multiplier=2),
+    ModelPrice("openai", "gpt-5.6-luna",       0.20,  1.20, 0.02, (), 0.25,
+               long_context_threshold=272_000, long_context_input_multiplier=2,
+               long_context_output_multiplier=1.5, long_context_cache_multiplier=2),
+    ModelPrice("openai", "gpt-5.5",            5.00, 30.00, 0.50,
+               long_context_threshold=272_000, long_context_input_multiplier=2,
+               long_context_output_multiplier=1.5, long_context_cache_multiplier=2),
+    ModelPrice("openai", "gpt-5.4",            2.50, 15.00, 0.25,
+               long_context_threshold=272_000, long_context_input_multiplier=2,
+               long_context_output_multiplier=1.5, long_context_cache_multiplier=2),
     ModelPrice("openai", "gpt-5.4-mini",      0.75,   4.50, 0.075),
     ModelPrice("openai", "gpt-5.3-codex",     1.75,  14.00, 0.175),
     ModelPrice("openai", "gpt-4o",            2.50,  10.00, 1.25,
@@ -59,16 +81,19 @@ OPENAI_PRICES = [
 # ─── Anthropic ──────────────────────────────────────────────────────────────
 
 ANTHROPIC_PRICES = [
-    # Verified against platform.claude.com pricing, 2026-08-21.
+    # Verified against platform.claude.com pricing, 2026-09-12.
     # cached = cache-read (~0.1x input); cache_write = 5-min-TTL cache-write (~1.25x input).
+    # Fable/Mythos 5.1 are the exception: cache reads cost 0.025x input.
+    ModelPrice("anthropic", "claude-fable-5-1",        10.00, 50.00, 0.25,
+               ("claude-mythos-5-1",), 12.50),
     ModelPrice("anthropic", "claude-fable-5",          10.00, 50.00, 1.00,
                ("claude-mythos-5",), 12.50),
     ModelPrice("anthropic", "claude-opus-5",            5.00, 25.00, 0.50, (), 6.25),
     ModelPrice("anthropic", "claude-opus-4-8",          5.00, 25.00, 0.50,
                ("claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5",
                 "claude-opus-4-5-20251101"), 6.25),
-    # Sonnet 5 sticker is $3/$15; introductory $2/$10 applies through 2026-08-31 —
-    # using intro rates so tracked spend matches actual billing. Revert after 2026-08-31.
+    # Anthropic made Sonnet 5's $2/$10 launch rate permanent and canceled the
+    # previously announced 2026-09-01 increase.
     ModelPrice("anthropic", "claude-sonnet-5",          2.00, 10.00, 0.20, (), 2.50),
     ModelPrice("anthropic", "claude-sonnet-4-6",        3.00, 15.00, 0.30,
                ("claude-sonnet-4-5", "claude-sonnet-4-5-20250929"), 3.75),
@@ -291,6 +316,16 @@ class Pricer:
                 output_rate = price.peak_output_per_1m
                 cached_rate = price.peak_cached_input_per_1m
 
+        prompt_input_tokens = input_tokens
+        if not cached_included_in_input:
+            prompt_input_tokens += cached_tokens
+        if not cache_creation_included_in_input:
+            prompt_input_tokens += cache_creation_tokens
+        if price.long_context_threshold and prompt_input_tokens > price.long_context_threshold:
+            input_rate *= price.long_context_input_multiplier
+            output_rate *= price.long_context_output_multiplier
+            cached_rate *= price.long_context_cache_multiplier
+
         included_cache = (cached_tokens if cached_included_in_input else 0)
         if cache_creation_included_in_input:
             included_cache += cache_creation_tokens
@@ -306,7 +341,12 @@ class Pricer:
 
         # Cache-write tokens at a premium (Anthropic 5-min TTL is 1.25x input)
         if cache_creation_tokens > 0:
-            write_rate = price.cache_write_per_1m or input_rate * 1.25
+            write_rate = price.cache_write_per_1m
+            if write_rate:
+                if price.long_context_threshold and prompt_input_tokens > price.long_context_threshold:
+                    write_rate *= price.long_context_cache_multiplier
+            else:
+                write_rate = input_rate * 1.25
             in_cost += (cache_creation_tokens / 1_000_000) * write_rate
 
         out_cost = (output_tokens / 1_000_000) * output_rate

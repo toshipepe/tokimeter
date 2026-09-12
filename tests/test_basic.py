@@ -144,6 +144,27 @@ def test_pricing_dated_and_inclusive_cache_rates():
     print("✓ test_pricing_dated_and_inclusive_cache_rates passed")
 
 
+def test_openai_current_and_long_context_rates():
+    """Current OpenAI prices include Astra, Sol's reduction, and >272K tier."""
+    pricer = Pricer()
+    astra = pricer.get_price("gpt-6-astra")
+    assert astra is not None
+    assert (astra.input_per_1m, astra.cached_input_per_1m, astra.output_per_1m) == (10, 1, 50)
+    assert pricer.get_price("gpt-5.6").model == "gpt-5.6-sol"
+    assert pricer.get_price("gpt-daybreak-blue-latest").model == "gpt-5.6-sol"
+    assert pricer.get_price("gpt-daybreak-red-latest").model == "gpt-5.6-cyber"
+    assert pricer.get_price("claude-mythos-5-1").model == "claude-fable-5-1"
+    assert pricer.get_price("claude-fable-5-1").cached_input_per_1m == 0.25
+    assert pricer.price_call("gpt-5.6-sol", 272_000, 100_000) == (1.088, 2.0, 3.088)
+    assert pricer.price_call("gpt-5.6-sol", 300_000, 100_000) == (2.4, 3.0, 5.4)
+    assert pricer.price_call(
+        "gpt-6-astra", 200_000, 10_000,
+        cached_tokens=100_000,
+        cached_included_in_input=False,
+    ) == (4.2, 0.75, 4.95)
+    print("✓ test_openai_current_and_long_context_rates passed")
+
+
 def test_tracker_memory():
     """Test in-memory tracking."""
     tracker = Tracker()  # in-memory mode
@@ -1069,6 +1090,7 @@ def run_all():
         test_pricing_aliases,
         test_pricing_current_recorded_models,
         test_pricing_dated_and_inclusive_cache_rates,
+        test_openai_current_and_long_context_rates,
         test_tracker_memory,
         test_tracker_separates_unknown_pricing,
         test_tracker_sqlite,

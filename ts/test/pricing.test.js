@@ -310,6 +310,38 @@ test('DeepSeek pricing selects the published UTC peak tier from the event timest
   assert.equal(peak.price.pricingTier, 'peak');
 });
 
+test('OpenAI long-context pricing applies to the full request above 272K input tokens', async () => {
+  const { getPrice, priceCall } = await import(pathToFileURL(PRICING).href);
+
+  assert.deepEqual(
+    [getPrice('gpt-6-astra').input, getPrice('gpt-6-astra').cached, getPrice('gpt-6-astra').output],
+    [10, 1, 50],
+  );
+  assert.equal(getPrice('gpt-5.6').model, 'gpt-5.6-sol');
+  assert.equal(getPrice('gpt-daybreak-blue-latest').model, 'gpt-5.6-sol');
+  assert.equal(getPrice('gpt-daybreak-red-latest').model, 'gpt-5.6-cyber');
+  assert.deepEqual([getPrice('gpt-5.6-cyber').input, getPrice('gpt-5.6-cyber').output], [12.5, 75]);
+  assert.equal(getPrice('claude-mythos-5-1').model, 'claude-fable-5-1');
+  assert.equal(getPrice('claude-fable-5-1').cached, 0.25);
+  assert.deepEqual([getPrice('gpt-5.6-sol').input, getPrice('gpt-5.6-sol').output], [4, 20]);
+
+  const boundary = priceCall('gpt-5.6-sol', 272_000, 100_000);
+  assert.equal(boundary.totalCost, 3.088);
+  assert.equal(boundary.price.pricingTier, undefined);
+
+  const long = priceCall('gpt-5.6-sol', 300_000, 100_000);
+  assert.equal(long.inputCost, 2.4);
+  assert.equal(long.outputCost, 3);
+  assert.equal(long.totalCost, 5.4);
+  assert.equal(long.price.pricingTier, 'long-context');
+
+  const disjointCache = priceCall('gpt-6-astra', 200_000, 10_000, 100_000, 0, {
+    cachedIncludedInInput: false,
+  });
+  assert.equal(disjointCache.inputCost, 4.2);
+  assert.equal(disjointCache.outputCost, 0.75);
+});
+
 test('inclusive cache-write ledgers do not double count cache creation tokens', async () => {
   const { priceCall } = await import(pathToFileURL(PRICING).href);
   const priced = priceCall('claude-sonnet-5', 1_000_000, 0, 200_000, 100_000, {
@@ -350,8 +382,10 @@ test('every downgrade suggestion points at a model that is actually priced', asy
 test('re-verified active rates match published pricing', async () => {
   const { getPrice } = await import(pathToFileURL(PRICING).href);
 
-  // OpenAI, per developers.openai.com. These four were wrong before the
-  // 2026-08-04 re-verification; o3 and gpt-5.6-luna by roughly 5x.
+  // OpenAI, per developers.openai.com. Sol changed in September; the others
+  // were corrected during the earlier re-verification.
+  assert.deepEqual([getPrice('gpt-5.6-sol').input, getPrice('gpt-5.6-sol').output], [4.00, 20.00]);
+  assert.equal(getPrice('gpt-5.6-sol').cacheWrite, 5.00);
   assert.deepEqual([getPrice('o3').input, getPrice('o3').output], [2.00, 8.00]);
   assert.equal(getPrice('o3').cached, 0.50);
   assert.deepEqual([getPrice('gpt-5.6-luna').input, getPrice('gpt-5.6-luna').output], [0.20, 1.20]);
@@ -366,8 +400,8 @@ test('re-verified active rates match published pricing', async () => {
   assert.equal(getPrice('grok-4.6').cached, 0.50);
   assert.deepEqual([getPrice('glm-5.3').input, getPrice('glm-5.3').output], [1.40, 4.40]);
 
-  // Anthropic re-verified with no change, including the introductory rate
-  // still in effect through 2026-08-31.
+  // Anthropic made Sonnet 5's launch rate permanent after previously
+  // announcing a September increase.
   assert.deepEqual([getPrice('claude-sonnet-5').input, getPrice('claude-sonnet-5').output], [2.00, 10.00]);
   assert.equal(getPrice('claude-opus-5').cacheWrite, 6.25);
 });

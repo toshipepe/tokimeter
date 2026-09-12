@@ -9,7 +9,7 @@ them to locally recorded token counts to produce an API-equivalent value, which
 it marks `~$` precisely because it is not a bill. See
 [the pricing methodology](PRICING.md) for how that distinction is enforced.
 
-78 models across 8 priced providers.
+81 models across 8 priced providers.
 7 of 8 are sourced and verified.
 
 > **1 providers below carry disputed rates.** Cursor were checked against their published pricing and did not match. Their sections say so, and their numbers should not be relied on until they are corrected. They are listed here rather than quietly omitted because hiding them would be the dishonest option.
@@ -17,13 +17,15 @@ it marks `~$` precisely because it is not a bill. See
 ## OpenAI
 
 **Source:** [developers.openai.com/api/docs/pricing](https://developers.openai.com/api/docs/pricing)  
-**Verified:** 2026-08-21
+**Verified:** 2026-09-12
 
-Standard (non-batch) text rates. o1-mini and gpt-4-turbo are no longer listed and keep their last published rates for older tracked usage.
+Standard (non-batch) text rates. GPT-6 Astra and GPT-5.6 Cyber were added; Daybreak Blue and Red resolve to their documented Sol and Cyber aliases. GPT-5.6 Sol's promotional $4/$20 rate is available at least through 2026-11-21. For Astra, GPT-5.6, GPT-5.5, and GPT-5.4, Tokimeter applies the published 2x input/cache and 1.5x output tier to the full request above 272K input tokens. o1-mini and gpt-4-turbo are no longer listed and keep their last published rates for older tracked usage.
 
 | Model | Input | Cache read | Cache write | Output |
 |---|---|---|---|---|
-| `gpt-5.6-sol` | $5.00 | $0.50 | $6.25 | $30.00 |
+| `gpt-6-astra` | $10.00 | $1.00 | $12.50 | $50.00 |
+| `gpt-5.6-sol` | $4.00 | $0.40 | $5.00 | $20.00 |
+| `gpt-5.6-cyber` | $12.50 | $1.25 | $15.625 | $75.00 |
 | `gpt-5.6-terra` | $2.00 | $0.20 | $2.50 | $12.00 |
 | `gpt-5.6-luna` | $0.20 | $0.02 | $0.25 | $1.20 |
 | `gpt-5.5` | $5.00 | $0.50 | $6.25 (1.25× input) | $30.00 |
@@ -43,15 +45,18 @@ Standard (non-batch) text rates. o1-mini and gpt-4-turbo are no longer listed an
 | `gpt-4-turbo` | $10.00 | _not published_ | $12.50 (1.25× input) | $30.00 |
 | `gpt-3.5-turbo` | $0.50 | _not published_ | $0.625 (1.25× input) | $1.50 |
 
+_Long-context tiers are described in the provider note above and are applied automatically by Tokimeter._
+
 ## Anthropic
 
 **Source:** [platform.claude.com pricing](https://platform.claude.com/docs/en/about-claude/pricing)  
-**Verified:** 2026-08-21
+**Verified:** 2026-09-12
 
-Cache read is 0.1x input; cache write is the 5-minute-TTL rate at 1.25x input. Re-verified with no changes.
+Cache read is normally 0.1x input and 5-minute cache write is 1.25x input. Fable 5.1 and Mythos 5.1 use the published lower 0.025x cache-read rate. Anthropic made Sonnet 5's $2/$10 introductory rate permanent and canceled the previously announced September increase.
 
 | Model | Input | Cache read | Cache write | Output |
 |---|---|---|---|---|
+| `claude-fable-5-1` | $10.00 | $0.25 | $12.50 | $50.00 |
 | `claude-fable-5` | $10.00 | $1.00 | $12.50 | $50.00 |
 | `claude-opus-5` | $5.00 | $0.50 | $6.25 | $25.00 |
 | `claude-opus-4-8` | $5.00 | $0.50 | $6.25 | $25.00 |
@@ -193,7 +198,6 @@ cannot quietly go stale.
 
 | Model | Effective | Change |
 |---|---|---|
-| `claude-sonnet-5` | 2026-08-31 | Introductory $2 input / $10 output applies through 2026-08-31, then reverts to $3 / $15 with cache read $0.30 and 5-minute cache write $3.75. |
 | `gemini-3.6-flash` | 2027-01-01 | Introductory $0.75 input / $3.75 output applies through 2026-12-31, then changes to $1.50 / $7.50 with cache read $0.15. |
 
 ## How to read this
@@ -207,4 +211,4 @@ cannot quietly go stale.
 - Local overrides in `~/.tokimeter/pricing.json` and the opt-in community feed
   take precedence in that order and are not shown here.
 
-_Generated 2026-08-20 from `ts/packages/core/src/pricing.js`._
+_Generated 2026-09-12 from `ts/packages/core/src/pricing.js`._

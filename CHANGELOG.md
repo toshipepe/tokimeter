@@ -5,6 +5,25 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+### Changed
+
+- Recognize OpenAI's restored five-hour Codex Plus allowance while
+  keeping vendor-recorded percentage/reset data separate from Tokimeter's local
+  five-hour totals and user-defined budgets. The allowance has no fixed message
+  count, so Tokimeter does not invent one.
+
+### Pricing
+
+- Add GPT-6 Astra and GPT-5.6 Cyber, map the Daybreak Blue/Red aliases, correct
+  GPT-5.6 Sol from `$5/$30` to its current `$4/$20` promotional rate, add the
+  `gpt-5.6` alias, and apply OpenAI's higher full-request price tier above 272K
+  input tokens for Astra, GPT-5.6, GPT-5.5, and GPT-5.4. Keep the JavaScript and
+  Python pricing engines in sync.
+- Add Claude Fable 5.1 and its limited-access Mythos 5.1 alias, including their
+  lower `$0.25/MTok` cache-read rate.
+- Keep Claude Sonnet 5 at `$2/$10` and remove its expired CI rate-change guard:
+  Anthropic made the launch price permanent and canceled the announced increase.
+
 ## 0.7.0 — 2026-08-27
 
 ### Added

@@ -135,6 +135,11 @@ reset times, no guessing. Claude Code doesn't record any rate-limit telemetry
 locally, so for Claude Tokimeter sticks to the honest rolling windows instead
 of inventing reset times.
 
+OpenAI currently meters Codex Plus in five-hour periods. The number of
+tasks is not fixed: it changes with the model, context, reasoning, tools, and
+caching. Tokimeter therefore reports the percentage and reset that Codex
+records instead of turning OpenAI's estimates into a made-up message cap.
+
 Set budgets once (`tokimeter config set budget.claude5h 60`, `budget.daily 50`,
 `budget.weekly 200`) and get warnings in the CLI **and** in Claude Code's own
 status line:
