@@ -546,8 +546,8 @@ test('pricing: anthropic disjoint buckets bill input + cache read + cache write'
 
 test('pricing: openai cached tokens are subtracted from input', () => {
   // gpt-5.5: $5 in, $0.50 cached, input inclusive of cached
-  const cost = priceCall('gpt-5.5', 1_000_000, 0, 500_000);
-  assert.ok(Math.abs(cost.inputCost - (0.5 * 5 + 0.5 * 0.5)) < 1e-9);
+  const cost = priceCall('gpt-5.5', 200_000, 0, 100_000);
+  assert.ok(Math.abs(cost.inputCost - (0.1 * 5 + 0.1 * 0.5)) < 1e-9);
 });
 
 test('pricing: fixture events price end-to-end without fallback', () => {

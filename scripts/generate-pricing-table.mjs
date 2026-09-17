@@ -131,6 +131,10 @@ function buildPage() {
     for (const price of models) {
       lines.push(`| \`${price.model}\` | ${usd(price.input)} | ${cacheRate(price.cached)} | ${cacheWriteFor(price)} | ${usd(price.output)} |`);
     }
+    if (models.some((price) => price.longContext)) {
+      lines.push('');
+      lines.push('_Long-context tiers are described in the provider note above and are applied automatically by Tokimeter._');
+    }
     lines.push('');
   }
 

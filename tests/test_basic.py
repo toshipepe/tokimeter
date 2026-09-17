@@ -128,8 +128,14 @@ def test_pricing_dated_and_inclusive_cache_rates():
         "deepseek-v4-flash", 1_000_000, 1_000_000,
         timestamp=1787293800,  # 2026-08-21 06:30 UTC
     )
-    assert off_peak[2] == 0.88
-    assert peak[2] == 1.76
+    weekend = pricer.price_call(
+        "deepseek-v4-flash", 1_000_000, 1_000_000,
+        timestamp=1787466600,  # 2026-08-23 06:30 UTC (Sunday)
+    )
+    assert off_peak[2] == 0.75
+    assert peak[2] == 1.5
+    assert weekend[2] == 0.75
+    assert pricer.get_price("deepseek-v4-flash").model == "deepseek-flash"
 
     inclusive = pricer.price_call(
         "claude-sonnet-5", 1_000_000, 0,
@@ -141,7 +147,43 @@ def test_pricing_dated_and_inclusive_cache_rates():
     assert pricer.get_price("codestral-latest").model == "codestral"
     assert pricer.get_price("grok-4.6").cached_input_per_1m == 0.5
     assert pricer.get_price("glm-5.3").output_per_1m == 4.4
+    assert pricer.get_price("glm-5.3-flash").output_per_1m == 0.5
+    assert pricer.get_price("gemini-3.8-flash").output_per_1m == 3.75
+    assert pricer.get_price("gemini-3.7-flash").output_per_1m == 3.75
+    assert pricer.get_price("zai-glm-5-2").cached_input_per_1m == 0.14
     print("✓ test_pricing_dated_and_inclusive_cache_rates passed")
+
+
+def test_google_and_xai_long_context_boundaries():
+    """Google uses >200K while xAI starts its long tier at exactly 200K."""
+    pricer = Pricer()
+    assert pricer.price_call("gemini-3.1-pro-preview", 200_000, 100_000) == (0.4, 1.2, 1.6)
+    assert pricer.price_call("gemini-3.1-pro-preview", 200_001, 100_000) == (0.800004, 1.8, 2.600004)
+    assert pricer.price_call("grok-4.20-0309-reasoning", 200_000, 100_000) == (0.5, 0.5, 1.0)
+    assert pricer.get_price("grok-4.20-multi-agent-0309").input_per_1m == 1.25
+    assert pricer.get_price("grok-4.20-0309-non-reasoning").output_per_1m == 2.5
+    print("✓ test_google_and_xai_long_context_boundaries passed")
+
+
+def test_openai_current_and_long_context_rates():
+    """Current OpenAI prices include Astra, Sol's reduction, and >272K tier."""
+    pricer = Pricer()
+    astra = pricer.get_price("gpt-6-astra")
+    assert astra is not None
+    assert (astra.input_per_1m, astra.cached_input_per_1m, astra.output_per_1m) == (10, 1, 50)
+    assert pricer.get_price("gpt-5.6").model == "gpt-5.6-sol"
+    assert pricer.get_price("gpt-daybreak-blue-latest").model == "gpt-5.6-sol"
+    assert pricer.get_price("gpt-daybreak-red-latest").model == "gpt-5.6-cyber"
+    assert pricer.get_price("claude-mythos-5-1").model == "claude-fable-5-1"
+    assert pricer.get_price("claude-fable-5-1").cached_input_per_1m == 0.25
+    assert pricer.price_call("gpt-5.6-sol", 272_000, 100_000) == (1.088, 2.0, 3.088)
+    assert pricer.price_call("gpt-5.6-sol", 300_000, 100_000) == (2.4, 3.0, 5.4)
+    assert pricer.price_call(
+        "gpt-6-astra", 200_000, 10_000,
+        cached_tokens=100_000,
+        cached_included_in_input=False,
+    ) == (4.2, 0.75, 4.95)
+    print("✓ test_openai_current_and_long_context_rates passed")
 
 
 def test_tracker_memory():
@@ -1069,6 +1111,8 @@ def run_all():
         test_pricing_aliases,
         test_pricing_current_recorded_models,
         test_pricing_dated_and_inclusive_cache_rates,
+        test_google_and_xai_long_context_boundaries,
+        test_openai_current_and_long_context_rates,
         test_tracker_memory,
         test_tracker_separates_unknown_pricing,
         test_tracker_sqlite,

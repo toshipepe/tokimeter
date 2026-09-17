@@ -5273,9 +5273,10 @@ async function runAgents(agentsArgs) {
 }
 
 // ─── Limits: 5-hour rolling window + weekly usage, with optional budgets ─────
-// Anthropic/OpenAI don't publish exact subscription quotas, so Tokimeter shows
-// your usage inside the same windows the vendors meter (5h rolling, weekly)
-// and warns against budgets you set yourself.
+// OpenAI publishes a five-hour Codex Plus window but not a fixed
+// message cap: usage varies by model and task. Tokimeter therefore shows the
+// vendor percentage/reset recorded by Codex, alongside local 5h/7d totals and
+// budgets the user sets. Claude does not record equivalent vendor counters.
 
 async function runLimits(limitsArgs) {
   const toolFilter = parseToolFilter(limitsArgs);
@@ -5356,8 +5357,8 @@ async function runLimits(limitsArgs) {
 
   console.log(`\n  Tokimeter Limits${toolFilter ? ` · ${toolFilter} only` : ''}`);
   console.log(`  ${'═'.repeat(50)}`);
-  console.log(`  Vendors meter subscriptions on a 5-hour rolling window plus a`);
-  console.log(`  weekly cap; exact quotas aren't published. Costs are ~API-equiv.\n`);
+  console.log(`  Codex Plus uses a 5-hour allowance; its task count varies.`);
+  console.log(`  Vendor counters are shown when recorded. Costs are ~API-equiv.\n`);
 
   for (const t of result.tools) {
     console.log(`  ${t.tool}`);
