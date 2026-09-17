@@ -5,6 +5,8 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
 
 ## Unreleased
 
+## 0.8.0 — 2026-09-17
+
 ### Changed
 
 - Recognize OpenAI's restored five-hour Codex Plus allowance while
