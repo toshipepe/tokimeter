@@ -22,10 +22,12 @@ class ModelPrice:
     aliases: tuple = ()  # alternative names that map to this model
     cache_write_per_1m: float = 0.0    # cache-write/creation input price (0 = default 1.25x input)
     peak_utc_hours: tuple = ()         # half-open UTC hour ranges, e.g. ((1, 4), (6, 10))
+    peak_utc_days: tuple = ()          # Sunday=0 through Saturday=6; empty means every day
     peak_input_per_1m: float = 0.0
     peak_output_per_1m: float = 0.0
     peak_cached_input_per_1m: float = 0.0
     long_context_threshold: int = 0
+    long_context_inclusive: bool = False
     long_context_input_multiplier: float = 1.0
     long_context_output_multiplier: float = 1.0
     long_context_cache_multiplier: float = 1.0
@@ -35,7 +37,7 @@ class ModelPrice:
 
 OPENAI_PRICES = [
     # Verified against developers.openai.com/api/docs/pricing and model pages,
-    # 2026-09-12. The trailing values model the published >272K input tier:
+    # 2026-09-18. The trailing values model the published >272K input tier:
     # 2x input/cache and 1.5x output for the full request.
     ModelPrice("openai", "gpt-6-astra",       10.00, 50.00, 1.00, (), 12.50,
                long_context_threshold=272_000, long_context_input_multiplier=2,
@@ -81,7 +83,7 @@ OPENAI_PRICES = [
 # ─── Anthropic ──────────────────────────────────────────────────────────────
 
 ANTHROPIC_PRICES = [
-    # Verified against platform.claude.com pricing, 2026-09-12.
+    # Verified against platform.claude.com pricing, 2026-09-18.
     # cached = cache-read (~0.1x input); cache_write = 5-min-TTL cache-write (~1.25x input).
     # Fable/Mythos 5.1 are the exception: cache reads cost 0.025x input.
     ModelPrice("anthropic", "claude-fable-5-1",        10.00, 50.00, 0.25,
@@ -115,11 +117,12 @@ ANTHROPIC_PRICES = [
 
 # ─── Google Gemini ──────────────────────────────────────────────────────────
 
-# Verified against ai.google.dev/gemini-api/docs/pricing, 2026-08-21, at the
-# short-context (<=200k) text tier. Gemini prices audio input and >200k context
-# higher; those tiers are not modeled, so such usage is under-valued rather
-# than guessed.
+# Verified against ai.google.dev/gemini-api/docs/pricing, 2026-09-18.
+# Gemini 3.1 Pro and 2.5 Pro use a higher full-request tier above 200K input.
+# Audio prices are not modeled.
 GOOGLE_PRICES = [
+    ModelPrice("google", "gemini-3.8-flash",        0.75,  3.75,  0.075),
+    ModelPrice("google", "gemini-3.7-flash",        0.75,  3.75,  0.075),
     ModelPrice("google", "gemini-3.6-flash",        0.75,  3.75,  0.075),
     ModelPrice("google", "gemini-3.5-flash",        1.50,  9.00,  0.15,
                ("gemini-3-flash",)),
@@ -127,9 +130,13 @@ GOOGLE_PRICES = [
                ("gemini-3-flash-lite",)),
     ModelPrice("google", "gemini-3.1-flash-lite",   0.25,  1.50,  0.025),
     ModelPrice("google", "gemini-3.1-pro-preview",  2.00,  12.00, 0.20,
-               ("gemini-3-pro", "gemini-3.5-pro")),
+               ("gemini-3-pro", "gemini-3.5-pro"),
+               long_context_threshold=200_000, long_context_input_multiplier=2,
+               long_context_output_multiplier=1.5, long_context_cache_multiplier=2),
     ModelPrice("google", "gemini-2.5-pro",          1.25,  10.00, 0.125,
-               ("gemini-2.5-pro-preview",)),
+               ("gemini-2.5-pro-preview",),
+               long_context_threshold=200_000, long_context_input_multiplier=2,
+               long_context_output_multiplier=1.5, long_context_cache_multiplier=2),
     ModelPrice("google", "gemini-2.5-flash",        0.30,  2.50,  0.03,
                ("gemini-2.5-flash-preview",)),
     ModelPrice("google", "gemini-2.5-flash-lite",   0.10,  0.40,  0.01),
@@ -137,7 +144,7 @@ GOOGLE_PRICES = [
 
 # ─── Mistral ────────────────────────────────────────────────────────────────
 
-# Verified against mistral.ai/pricing/api, 2026-08-21. The floating -latest
+# Verified against mistral.ai/pricing/api, 2026-09-18. The floating -latest
 # aliases resolve to the current generation. Cache read is a 90% discount.
 MISTRAL_PRICES = [
     ModelPrice("mistral", "mistral-large-3",        0.50, 1.50, 0.05,
@@ -151,6 +158,8 @@ MISTRAL_PRICES = [
     ModelPrice("mistral", "ministral-3-14b",        0.20, 0.20, 0.02),
     ModelPrice("mistral", "codestral",              0.30, 0.90, 0.03,
                ("codestral-latest",)),
+    ModelPrice("mistral", "zai-glm-5-2",            1.40, 4.40, 0.14),
+    ModelPrice("mistral", "labs-leanstral-2603",    0.00, 0.00, 0.00),
     ModelPrice("mistral", "mistral-embed",          0.10, 0.0),
 ]
 
@@ -166,13 +175,37 @@ LLAMA_PRICES = []
 # ─── xAI Grok ───────────────────────────────────────────────────────────────
 
 XAI_PRICES = [
-    # Verified against docs.x.ai models pricing, 2026-08-21, at the <200k tier.
-    # Delisted models keep their last published rates for older usage.
+    # Verified against docs.x.ai pricing, 2026-09-18. Current models use 2x
+    # rates for the full request at >=200K prompt tokens.
     ModelPrice("xai", "grok-build",        1.00,  2.00, 0.20,
-               ("grok-build-0.1", "grok-build-b")),
-    ModelPrice("xai", "grok-4.6",          2.00,  6.00, 0.50, ("grok-4.6-latest",)),
-    ModelPrice("xai", "grok-4.5",          2.00,  6.00, 0.30, ("grok-4.5-latest",)),
-    ModelPrice("xai", "grok-4.3",          1.25,  2.50, 0.20),
+               ("grok-build-0.1", "grok-build-b"),
+               long_context_threshold=200_000, long_context_inclusive=True,
+               long_context_input_multiplier=2, long_context_output_multiplier=2,
+               long_context_cache_multiplier=2),
+    ModelPrice("xai", "grok-4.6",          2.00,  6.00, 0.50, ("grok-4.6-latest",),
+               long_context_threshold=200_000, long_context_inclusive=True,
+               long_context_input_multiplier=2, long_context_output_multiplier=2,
+               long_context_cache_multiplier=2),
+    ModelPrice("xai", "grok-4.5",          2.00,  6.00, 0.30, ("grok-4.5-latest",),
+               long_context_threshold=200_000, long_context_inclusive=True,
+               long_context_input_multiplier=2, long_context_output_multiplier=2,
+               long_context_cache_multiplier=2),
+    ModelPrice("xai", "grok-4.3",          1.25,  2.50, 0.20,
+               long_context_threshold=200_000, long_context_inclusive=True,
+               long_context_input_multiplier=2, long_context_output_multiplier=2,
+               long_context_cache_multiplier=2),
+    ModelPrice("xai", "grok-4.20-multi-agent-0309", 1.25, 2.50, 0.20,
+               long_context_threshold=200_000, long_context_inclusive=True,
+               long_context_input_multiplier=2, long_context_output_multiplier=2,
+               long_context_cache_multiplier=2),
+    ModelPrice("xai", "grok-4.20-0309-reasoning", 1.25, 2.50, 0.20,
+               long_context_threshold=200_000, long_context_inclusive=True,
+               long_context_input_multiplier=2, long_context_output_multiplier=2,
+               long_context_cache_multiplier=2),
+    ModelPrice("xai", "grok-4.20-0309-non-reasoning", 1.25, 2.50, 0.20,
+               long_context_threshold=200_000, long_context_inclusive=True,
+               long_context_input_multiplier=2, long_context_output_multiplier=2,
+               long_context_cache_multiplier=2),
     ModelPrice("xai", "grok-4",            5.00, 15.00),
     ModelPrice("xai", "grok-4-fast",       0.20, 0.50),
     ModelPrice("xai", "grok-3",            3.00, 15.00),
@@ -182,14 +215,17 @@ XAI_PRICES = [
 
 # ─── DeepSeek ───────────────────────────────────────────────────────────────
 
-# Verified against api-docs.deepseek.com/quick_start/pricing, 2026-08-21.
-# Base fields are off-peak; Pricer selects the published peak tier from time.
+# Verified against api-docs.deepseek.com/quick_start/pricing, 2026-09-18.
+# Base fields are off-peak; Pricer selects peak rates only on weekdays.
 DEEPSEEK_PRICES = [
-    ModelPrice("deepseek", "deepseek-v4-flash", 0.22, 0.66, 0.007,
-               peak_utc_hours=((1, 4), (6, 10)), peak_input_per_1m=0.44,
-               peak_output_per_1m=1.32, peak_cached_input_per_1m=0.014),
+    ModelPrice("deepseek", "deepseek-flash", 0.15, 0.60, 0.003,
+               ("deepseek-v4-flash", "deepseek-v4-flash-vision-exp"),
+               peak_utc_hours=((1, 4), (6, 10)), peak_utc_days=(1, 2, 3, 4, 5),
+               peak_input_per_1m=0.30, peak_output_per_1m=1.20,
+               peak_cached_input_per_1m=0.006),
     ModelPrice("deepseek", "deepseek-v4-pro", 0.66, 1.98, 0.022,
-               peak_utc_hours=((1, 4), (6, 10)), peak_input_per_1m=1.32,
+               peak_utc_hours=((1, 4), (6, 10)), peak_utc_days=(1, 2, 3, 4, 5),
+               peak_input_per_1m=1.32,
                peak_output_per_1m=3.96, peak_cached_input_per_1m=0.044),
 ]
 
@@ -205,6 +241,7 @@ COHERE_PRICES = [
 
 ZAI_PRICES = [
     ModelPrice("zai", "glm-5.3",       1.40, 4.40, 0.26),
+    ModelPrice("zai", "glm-5.3-flash", 0.15, 0.50, 0.03),
     ModelPrice("zai", "glm-5.2",       1.40, 4.40, 0.26),
     ModelPrice("zai", "glm-5.1",       1.40, 4.40, 0.26),
     ModelPrice("zai", "glm-5",         1.00, 3.20, 0.20),
@@ -311,7 +348,11 @@ class Pricer:
             else:
                 seconds = raw_timestamp / 1000 if raw_timestamp > 100_000_000_000 else raw_timestamp
                 now = datetime.fromtimestamp(seconds, timezone.utc)
-            if any(start <= now.hour < end for start, end in price.peak_utc_hours):
+            # Python weekday(): Monday=0. Stored days mirror JS Date.getUTCDay()
+            # where Sunday=0, so convert before matching.
+            utc_day = (now.weekday() + 1) % 7
+            day_allowed = not price.peak_utc_days or utc_day in price.peak_utc_days
+            if day_allowed and any(start <= now.hour < end for start, end in price.peak_utc_hours):
                 input_rate = price.peak_input_per_1m
                 output_rate = price.peak_output_per_1m
                 cached_rate = price.peak_cached_input_per_1m
@@ -321,7 +362,12 @@ class Pricer:
             prompt_input_tokens += cached_tokens
         if not cache_creation_included_in_input:
             prompt_input_tokens += cache_creation_tokens
-        if price.long_context_threshold and prompt_input_tokens > price.long_context_threshold:
+        long_context = bool(price.long_context_threshold) and (
+            prompt_input_tokens >= price.long_context_threshold
+            if price.long_context_inclusive
+            else prompt_input_tokens > price.long_context_threshold
+        )
+        if long_context:
             input_rate *= price.long_context_input_multiplier
             output_rate *= price.long_context_output_multiplier
             cached_rate *= price.long_context_cache_multiplier
@@ -343,7 +389,7 @@ class Pricer:
         if cache_creation_tokens > 0:
             write_rate = price.cache_write_per_1m
             if write_rate:
-                if price.long_context_threshold and prompt_input_tokens > price.long_context_threshold:
+                if long_context:
                     write_rate *= price.long_context_cache_multiplier
             else:
                 write_rate = input_rate * 1.25

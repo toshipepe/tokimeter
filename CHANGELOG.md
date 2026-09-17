@@ -21,6 +21,14 @@ The versioning is [semver](https://semver.org); pre-1.0, minor versions may add 
   Python pricing engines in sync.
 - Add Claude Fable 5.1 and its limited-access Mythos 5.1 alias, including their
   lower `$0.25/MTok` cache-read rate.
+- Add Gemini 3.8 Flash and 3.7 Flash with dated promotional-price guards, and
+  apply Google's published long-context tier for Gemini 3.1 Pro and 2.5 Pro.
+- Add all three Grok 4.20 IDs and apply xAI's 2x full-request tier at 200K or
+  more prompt tokens to current Grok text models.
+- Update DeepSeek Flash to the canonical `deepseek-flash` / V4.1 model and its
+  lower `$0.15/$0.60` off-peak rate. Apply peak rates only during the published
+  weekday UTC windows instead of incorrectly charging the weekend peak tier.
+- Add Z.AI's GLM-5.3-Flash plus Mistral-hosted GLM 5.2 and free Leanstral.
 - Keep Claude Sonnet 5 at `$2/$10` and remove its expired CI rate-change guard:
   Anthropic made the launch price permanent and canceled the announced increase.
 

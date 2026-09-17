@@ -259,7 +259,7 @@ test('report JSON discovers OpenHuman active-user costs and preserves cost prove
 test('corrected rates match published pricing, aliases included', async () => {
   const { getPrice } = await import(pathToFileURL(PRICING).href);
 
-  // Google, short-context tier per ai.google.dev, verified 2026-08-21.
+  // Google, standard text rates per ai.google.dev, verified 2026-09-18.
   assert.deepEqual(
     [getPrice('gemini-2.5-flash').input, getPrice('gemini-2.5-flash').output],
     [0.30, 2.50],
@@ -273,11 +273,19 @@ test('corrected rates match published pricing, aliases included', async () => {
   assert.equal(getPrice('gemini-3-flash').model, 'gemini-3.5-flash');
   assert.equal(getPrice('gemini-3-pro').model, 'gemini-3.1-pro-preview');
   assert.deepEqual(
+    [getPrice('gemini-3.8-flash').input, getPrice('gemini-3.8-flash').output],
+    [0.75, 3.75],
+  );
+  assert.deepEqual(
+    [getPrice('gemini-3.7-flash').input, getPrice('gemini-3.7-flash').output],
+    [0.75, 3.75],
+  );
+  assert.deepEqual(
     [getPrice('gemini-3.6-flash').input, getPrice('gemini-3.6-flash').output],
     [0.75, 3.75],
   );
 
-  // Mistral, per mistral.ai/pricing/api, verified 2026-08-21. The floating
+  // Mistral, per mistral.ai/pricing/api, verified 2026-09-18. The floating
   // -latest aliases must resolve to the generation they actually point at.
   assert.equal(getPrice('mistral-large-latest').model, 'mistral-large-3');
   assert.deepEqual(
@@ -289,8 +297,10 @@ test('corrected rates match published pricing, aliases included', async () => {
   assert.equal(getPrice('mistral-small-4').cached, 0.015);
   assert.equal(getPrice('codestral-latest').model, 'codestral');
   assert.deepEqual([getPrice('codestral').input, getPrice('codestral').output], [0.30, 0.90]);
+  assert.deepEqual([getPrice('zai-glm-5-2').cached, getPrice('zai-glm-5-2').output], [0.14, 4.40]);
+  assert.deepEqual([getPrice('labs-leanstral-2603').input, getPrice('labs-leanstral-2603').output], [0, 0]);
 
-  // DeepSeek off-peak base rates, per api-docs.deepseek.com, verified 2026-08-21.
+  // DeepSeek off-peak base rates, per api-docs.deepseek.com, verified 2026-09-18.
   assert.deepEqual(
     [getPrice('deepseek-v4-pro').input, getPrice('deepseek-v4-pro').output],
     [0.66, 1.98],
@@ -305,9 +315,34 @@ test('DeepSeek pricing selects the published UTC peak tier from the event timest
   const peak = priceCall('deepseek-v4-flash', 1_000_000, 1_000_000, 0, 0, {
     timestamp: Date.parse('2026-08-21T06:30:00Z'),
   });
-  assert.equal(offPeak.totalCost, 0.88);
-  assert.equal(peak.totalCost, 1.76);
+  const weekend = priceCall('deepseek-v4-flash', 1_000_000, 1_000_000, 0, 0, {
+    timestamp: Date.parse('2026-08-23T06:30:00Z'),
+  });
+  assert.equal(offPeak.totalCost, 0.75);
+  assert.equal(peak.totalCost, 1.5);
   assert.equal(peak.price.pricingTier, 'peak');
+  assert.equal(weekend.totalCost, 0.75);
+  assert.equal(weekend.price.pricingTier, undefined);
+  assert.equal(peak.price.model, 'deepseek-flash');
+});
+
+test('Google and xAI apply their published long-context boundaries', async () => {
+  const { getPrice, priceCall } = await import(pathToFileURL(PRICING).href);
+
+  const googleBoundary = priceCall('gemini-3.1-pro-preview', 200_000, 100_000);
+  const googleLong = priceCall('gemini-3.1-pro-preview', 200_001, 100_000);
+  assert.equal(googleBoundary.totalCost, 1.6);
+  assert.equal(googleBoundary.price.pricingTier, undefined);
+  assert.equal(googleLong.totalCost, 2.600004);
+  assert.equal(googleLong.price.pricingTier, 'long-context');
+
+  const grokLong = priceCall('grok-4.20-0309-reasoning', 200_000, 100_000);
+  assert.equal(grokLong.totalCost, 1);
+  assert.equal(grokLong.price.pricingTier, 'long-context');
+  assert.deepEqual(
+    [getPrice('grok-4.20-multi-agent-0309').input, getPrice('grok-4.20-0309-non-reasoning').output],
+    [1.25, 2.5],
+  );
 });
 
 test('OpenAI long-context pricing applies to the full request above 272K input tokens', async () => {
@@ -398,7 +433,9 @@ test('re-verified active rates match published pricing', async () => {
   assert.equal(getPrice('grok-build').cached, 0.20);
   assert.deepEqual([getPrice('grok-4.6').input, getPrice('grok-4.6').output], [2.00, 6.00]);
   assert.equal(getPrice('grok-4.6').cached, 0.50);
+  assert.deepEqual([getPrice('grok-4.20-0309-reasoning').input, getPrice('grok-4.20-0309-reasoning').output], [1.25, 2.50]);
   assert.deepEqual([getPrice('glm-5.3').input, getPrice('glm-5.3').output], [1.40, 4.40]);
+  assert.deepEqual([getPrice('glm-5.3-flash').input, getPrice('glm-5.3-flash').output], [0.15, 0.50]);
 
   // Anthropic made Sonnet 5's launch rate permanent after previously
   // announcing a September increase.

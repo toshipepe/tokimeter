@@ -9,7 +9,7 @@ them to locally recorded token counts to produce an API-equivalent value, which
 it marks `~$` precisely because it is not a bill. See
 [the pricing methodology](PRICING.md) for how that distinction is enforced.
 
-81 models across 8 priced providers.
+89 models across 8 priced providers.
 7 of 8 are sourced and verified.
 
 > **1 providers below carry disputed rates.** Cursor were checked against their published pricing and did not match. Their sections say so, and their numbers should not be relied on until they are corrected. They are listed here rather than quietly omitted because hiding them would be the dishonest option.
@@ -17,7 +17,7 @@ it marks `~$` precisely because it is not a bill. See
 ## OpenAI
 
 **Source:** [developers.openai.com/api/docs/pricing](https://developers.openai.com/api/docs/pricing)  
-**Verified:** 2026-09-12
+**Verified:** 2026-09-18
 
 Standard (non-batch) text rates. GPT-6 Astra and GPT-5.6 Cyber were added; Daybreak Blue and Red resolve to their documented Sol and Cyber aliases. GPT-5.6 Sol's promotional $4/$20 rate is available at least through 2026-11-21. For Astra, GPT-5.6, GPT-5.5, and GPT-5.4, Tokimeter applies the published 2x input/cache and 1.5x output tier to the full request above 272K input tokens. o1-mini and gpt-4-turbo are no longer listed and keep their last published rates for older tracked usage.
 
@@ -50,7 +50,7 @@ _Long-context tiers are described in the provider note above and are applied aut
 ## Anthropic
 
 **Source:** [platform.claude.com pricing](https://platform.claude.com/docs/en/about-claude/pricing)  
-**Verified:** 2026-09-12
+**Verified:** 2026-09-18
 
 Cache read is normally 0.1x input and 5-minute cache write is 1.25x input. Fable 5.1 and Mythos 5.1 use the published lower 0.025x cache-read rate. Anthropic made Sonnet 5's $2/$10 introductory rate permanent and canceled the previously announced September increase.
 
@@ -72,12 +72,14 @@ Cache read is normally 0.1x input and 5-minute cache write is 1.25x input. Fable
 ## Google
 
 **Source:** [ai.google.dev Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)  
-**Verified:** 2026-08-21
+**Verified:** 2026-09-18
 
-Short-context (<=200k) text tier. Gemini 3.6 Flash uses its introductory rate through 2026-12-31. Audio and >200k tiers are not modeled, so such usage is under-valued rather than guessed.
+Standard text rates. Gemini 3.8, 3.7, and 3.6 Flash use introductory rates through 2026-12-31. Tokimeter applies the published >200K full-request tier for Gemini 3.1 Pro and 2.5 Pro. Audio pricing and context-cache storage charges are not modeled.
 
 | Model | Input | Cache read | Cache write | Output |
 |---|---|---|---|---|
+| `gemini-3.8-flash` | $0.75 | $0.075 | $0.9375 (1.25× input) | $3.75 |
+| `gemini-3.7-flash` | $0.75 | $0.075 | $0.9375 (1.25× input) | $3.75 |
 | `gemini-3.6-flash` | $0.75 | $0.075 | $0.9375 (1.25× input) | $3.75 |
 | `gemini-3.5-flash` | $1.50 | $0.15 | $1.875 (1.25× input) | $9.00 |
 | `gemini-3.5-flash-lite` | $0.30 | $0.03 | $0.375 (1.25× input) | $2.50 |
@@ -87,12 +89,14 @@ Short-context (<=200k) text tier. Gemini 3.6 Flash uses its introductory rate th
 | `gemini-2.5-flash` | $0.30 | $0.03 | $0.375 (1.25× input) | $2.50 |
 | `gemini-2.5-flash-lite` | $0.10 | $0.01 | $0.125 (1.25× input) | $0.40 |
 
+_Long-context tiers are described in the provider note above and are applied automatically by Tokimeter._
+
 ## Mistral
 
 **Source:** [mistral.ai/pricing/api](https://mistral.ai/pricing/api/)  
-**Verified:** 2026-08-21
+**Verified:** 2026-09-18
 
-The floating -latest aliases are priced against the current generation they resolve to. Codestral is listed again at its current published rate. Cache read is Mistral's published 90 percent discount.
+The floating -latest aliases are priced against the current generation they resolve to. Codestral remains at its published rate. Mistral-hosted Z.AI GLM 5.2 and the free Leanstral labs endpoint are included. Cache read is Mistral's published 90 percent discount.
 
 | Model | Input | Cache read | Cache write | Output |
 |---|---|---|---|---|
@@ -103,13 +107,15 @@ The floating -latest aliases are priced against the current generation they reso
 | `ministral-3-8b` | $0.15 | $0.015 | $0.1875 (1.25× input) | $0.15 |
 | `ministral-3-14b` | $0.20 | $0.02 | $0.25 (1.25× input) | $0.20 |
 | `codestral` | $0.30 | $0.03 | $0.375 (1.25× input) | $0.90 |
+| `zai-glm-5-2` | $1.40 | $0.14 | $1.75 (1.25× input) | $4.40 |
+| `labs-leanstral-2603` | $0.00 | _not published_ | $0.00 (1.25× input) | $0.00 |
 
 ## xAI
 
 **Source:** [docs.x.ai models pricing](https://docs.x.ai/docs/models)  
-**Verified:** 2026-08-21
+**Verified:** 2026-09-18
 
-Rates use the <200k context tier; xAI charges more above it and that tier is not modeled. Grok 4.6 was added from the current model page. Delisted models keep their last published rates for older usage.
+Standard global-endpoint rates. Tokimeter applies the published 2x input/cache/output rates to the full request at 200K or more prompt tokens. Grok 4.20 reasoning, non-reasoning, and multi-agent IDs are included. Delisted models keep their last published rates for older usage. The US regional endpoint's 10 percent premium is not inferable from local token logs and is not applied.
 
 | Model | Input | Cache read | Cache write | Output |
 |---|---|---|---|---|
@@ -117,6 +123,9 @@ Rates use the <200k context tier; xAI charges more above it and that tier is not
 | `grok-4.6` | $2.00 | $0.50 | $2.50 (1.25× input) | $6.00 |
 | `grok-4.5` | $2.00 | $0.30 | $2.50 (1.25× input) | $6.00 |
 | `grok-4.3` | $1.25 | $0.20 | $1.5625 (1.25× input) | $2.50 |
+| `grok-4.20-multi-agent-0309` | $1.25 | $0.20 | $1.5625 (1.25× input) | $2.50 |
+| `grok-4.20-0309-reasoning` | $1.25 | $0.20 | $1.5625 (1.25× input) | $2.50 |
+| `grok-4.20-0309-non-reasoning` | $1.25 | $0.20 | $1.5625 (1.25× input) | $2.50 |
 | `grok-composer-2.5-fast` | $3.00 | _not published_ | $3.75 (1.25× input) | $15.00 |
 | `grok-4` | $5.00 | _not published_ | $6.25 (1.25× input) | $15.00 |
 | `grok-4-fast` | $0.20 | _not published_ | $0.25 (1.25× input) | $0.50 |
@@ -124,29 +133,32 @@ Rates use the <200k context tier; xAI charges more above it and that tier is not
 | `grok-3-mini` | $0.30 | _not published_ | $0.375 (1.25× input) | $0.50 |
 | `grok-2` | $2.00 | _not published_ | $2.50 (1.25× input) | $10.00 |
 
+_Long-context tiers are described in the provider note above and are applied automatically by Tokimeter._
+
 ## DeepSeek
 
 **Source:** [api-docs.deepseek.com pricing](https://api-docs.deepseek.com/quick_start/pricing)  
-**Verified:** 2026-08-21
+**Verified:** 2026-09-18
 
-Off-peak and peak rates effective 2026-08-16. Tokimeter selects the published peak tier for 01:00-04:00 and 06:00-10:00 UTC from each event timestamp; all other hours use off-peak.
+DeepSeek V4.1 Flash now uses the canonical deepseek-flash ID; legacy V4 Flash IDs resolve to it. Tokimeter applies peak rates only from 01:00-04:00 and 06:00-10:00 UTC Monday-Friday; weekends and all other hours use off-peak. DeepSeek V4 Pro remains available at its existing rate.
 
 | Model | Input | Cache read | Cache write | Output |
 |---|---|---|---|---|
-| `deepseek-v4-flash` | $0.22 | $0.007 | $0.275 (1.25× input) | $0.66 |
+| `deepseek-flash` | $0.15 | $0.003 | $0.1875 (1.25× input) | $0.60 |
 | `deepseek-v4-pro` | $0.66 | $0.022 | $0.825 (1.25× input) | $1.98 |
 
 ## Z.AI
 
 **Source:** [docs.z.ai pricing](https://docs.z.ai/guides/overview/pricing)  
-**Verified:** 2026-08-21
+**Verified:** 2026-09-18
 
-Current text-model rates through GLM-5.3 are verified. Older GLM entries no longer listed keep their last published rates for historical usage.
+Current text-model rates through GLM-5.3 Flash are verified. Older GLM entries no longer listed keep their last published rates for historical usage.
 
 | Model | Input | Cache read | Cache write | Output |
 |---|---|---|---|---|
 | `glm-5.2` | $1.40 | $0.26 | $1.75 (1.25× input) | $4.40 |
 | `glm-5.3` | $1.40 | $0.26 | $1.75 (1.25× input) | $4.40 |
+| `glm-5.3-flash` | $0.15 | $0.03 | $0.1875 (1.25× input) | $0.50 |
 | `glm-5.1` | $1.40 | $0.26 | $1.75 (1.25× input) | $4.40 |
 | `glm-5` | $1.00 | $0.20 | $1.25 (1.25× input) | $3.20 |
 | `glm-5-turbo` | $1.20 | $0.24 | $1.50 (1.25× input) | $4.00 |
@@ -198,6 +210,8 @@ cannot quietly go stale.
 
 | Model | Effective | Change |
 |---|---|---|
+| `gemini-3.8-flash` | 2027-01-01 | Introductory $0.75 input / $3.75 output applies through 2026-12-31, then changes to $1.50 / $7.50 with cache read $0.15. |
+| `gemini-3.7-flash` | 2027-01-01 | Introductory $0.75 input / $3.75 output applies through 2026-12-31, then changes to $1.50 / $7.50 with cache read $0.15. |
 | `gemini-3.6-flash` | 2027-01-01 | Introductory $0.75 input / $3.75 output applies through 2026-12-31, then changes to $1.50 / $7.50 with cache read $0.15. |
 
 ## How to read this
@@ -211,4 +225,4 @@ cannot quietly go stale.
 - Local overrides in `~/.tokimeter/pricing.json` and the opt-in community feed
   take precedence in that order and are not shown here.
 
-_Generated 2026-09-12 from `ts/packages/core/src/pricing.js`._
+_Generated 2026-09-17 from `ts/packages/core/src/pricing.js`._

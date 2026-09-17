@@ -22,8 +22,8 @@ import { dirname, join } from 'node:path';
  * @property {string[]} aliases  - alternative names that map to this model
  * @property {boolean} [custom] - user-supplied local price
  * @property {boolean} [feed] - community-feed price
- * @property {{ peakUtcHours: number[][], peak: { input: number, output: number, cached: number } }} [timeRates]
- * @property {{ thresholdInputTokens: number, inputMultiplier: number, outputMultiplier: number, cacheMultiplier: number }} [longContext]
+ * @property {{ peakUtcHours: number[][], peakUtcDays?: number[], peak: { input: number, output: number, cached: number } }} [timeRates]
+ * @property {{ thresholdInputTokens: number, inclusive?: boolean, inputMultiplier: number, outputMultiplier: number, cacheMultiplier: number }} [longContext]
  */
 
 // ─── Prices ─────────────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ import { dirname, join } from 'node:path';
 const PRICES = [
   // ─── OpenAI ───────────────────────────────────────────────────────────────
   // Verified against developers.openai.com/api/docs/pricing and model pages,
-  // 2026-09-12. These 1.05M-context models charge 2x input/cache and 1.5x
+  // 2026-09-18. These 1.05M-context models charge 2x input/cache and 1.5x
   // output for the full request above 272K input tokens. 5.6+ publishes
   // explicit cache-write pricing at 1.25x input. o1-mini is no longer listed
   // and is kept at its last published rate for older usage.
@@ -68,7 +68,7 @@ const PRICES = [
   { provider: "openai", model: "gpt-3.5-turbo",    input: 0.50,  output: 1.50,  cached: 0 },
 
   // ─── Anthropic ────────────────────────────────────────────────────────────
-  // Verified against platform.claude.com pricing, 2026-09-12.
+  // Verified against platform.claude.com pricing, 2026-09-18.
   // cached = cache-read rate (~0.1x input); cacheWrite = 5-minute-TTL cache-write rate (~1.25x input).
   // Fable/Mythos 5.1 are the exception: their cache-read rate is 0.025x input.
   { provider: "anthropic", model: "claude-fable-5-1",        input: 10.00, output: 50.00, cached: 0.25, cacheWrite: 12.50,
@@ -96,13 +96,13 @@ const PRICES = [
   { provider: "anthropic", model: "claude-3-haiku",          input: 0.25,  output: 1.25,  cached: 0 },
 
   // ─── Google Gemini ────────────────────────────────────────────────────────
-  // Verified against ai.google.dev/gemini-api/docs/pricing, 2026-08-21, at the
-  // short-context (<=200k) text tier, matching the convention used for OpenAI
-  // above. Gemini prices audio input and >200k context higher; Tokimeter does
-  // not model those tiers, so long-context and audio usage is under-valued
-  // rather than guessed.
-  // Introductory rates apply through 2026-12-31; a dated CI guard prevents
+  // Verified against ai.google.dev/gemini-api/docs/pricing, 2026-09-18.
+  // Introductory Flash rates apply through 2026-12-31; dated CI guards prevent
   // them from silently surviving the change to $1.50/$7.50 on 2027-01-01.
+  // Gemini 3.1 Pro and 2.5 Pro charge 2x input/cache and 1.5x output above
+  // 200K input tokens. Audio rates are not modeled.
+  { provider: "google", model: "gemini-3.8-flash",        input: 0.75,  output: 3.75,  cached: 0.075 },
+  { provider: "google", model: "gemini-3.7-flash",        input: 0.75,  output: 3.75,  cached: 0.075 },
   { provider: "google", model: "gemini-3.6-flash",        input: 0.75,  output: 3.75,  cached: 0.075 },
   { provider: "google", model: "gemini-3.5-flash",        input: 1.50,  output: 9.00,  cached: 0.15,
     aliases: ["gemini-3-flash"] },
@@ -110,13 +110,15 @@ const PRICES = [
     aliases: ["gemini-3-flash-lite"] },
   { provider: "google", model: "gemini-3.1-flash-lite",   input: 0.25,  output: 1.50,  cached: 0.025 },
   { provider: "google", model: "gemini-3.1-pro-preview",  input: 2.00,  output: 12.00, cached: 0.20,
-    aliases: ["gemini-3-pro", "gemini-3.5-pro"] },
-  { provider: "google", model: "gemini-2.5-pro",          input: 1.25,  output: 10.00, cached: 0.125 },
+    aliases: ["gemini-3-pro", "gemini-3.5-pro"],
+    longContext: { thresholdInputTokens: 200_000, inputMultiplier: 2, outputMultiplier: 1.5, cacheMultiplier: 2 } },
+  { provider: "google", model: "gemini-2.5-pro",          input: 1.25,  output: 10.00, cached: 0.125,
+    longContext: { thresholdInputTokens: 200_000, inputMultiplier: 2, outputMultiplier: 1.5, cacheMultiplier: 2 } },
   { provider: "google", model: "gemini-2.5-flash",        input: 0.30,  output: 2.50,  cached: 0.03 },
   { provider: "google", model: "gemini-2.5-flash-lite",   input: 0.10,  output: 0.40,  cached: 0.01 },
 
   // ─── Mistral ──────────────────────────────────────────────────────────────
-  // Verified against mistral.ai/pricing/api, 2026-08-21. The floating -latest
+  // Verified against mistral.ai/pricing/api, 2026-09-18. The floating -latest
   // aliases resolve to the current generation, so they are priced against it.
   // Mistral publishes cache-read at a 90% discount on input.
   { provider: "mistral", model: "mistral-large-3",        input: 0.50, output: 1.50, cached: 0.05,
@@ -130,6 +132,8 @@ const PRICES = [
   { provider: "mistral", model: "ministral-3-14b",        input: 0.20, output: 0.20, cached: 0.02 },
   { provider: "mistral", model: "codestral",              input: 0.30, output: 0.90, cached: 0.03,
     aliases: ["codestral-latest"] },
+  { provider: "mistral", model: "zai-glm-5-2",            input: 1.40, output: 4.40, cached: 0.14 },
+  { provider: "mistral", model: "labs-leanstral-2603",    input: 0,    output: 0,    cached: 0 },
 
   // ─── Meta Llama ───────────────────────────────────────────────────────────
   // Intentionally unpriced. Meta publishes no generally available first-party
@@ -142,23 +146,30 @@ const PRICES = [
   //   tokimeter pricing set llama-4-maverick --input <in> --output <out>
 
   // ─── xAI Grok ─────────────────────────────────────────────────────────────
-  // Verified against docs.x.ai models pricing, 2026-08-21, at the <200k tier.
-  // xAI publishes explicit cache-read rates; they were previously recorded as
-  // unpriced. Models below grok-4.3 are no longer listed and keep their last
-  // published rates for older tracked usage.
+  // Verified against docs.x.ai pricing, 2026-09-18. Current models charge 2x
+  // input/cache/output for the full request at >=200K prompt tokens. Models
+  // below grok-4.3 are no longer listed and keep their last published rates
+  // for older tracked usage.
   // grok-build: docs.x.ai Code API pricing; the Grok
   // Build CLI reports the model as grok-build / grok-build-b, API id is
   // grok-build-0.1. No cached-input price published → cached tokens free.
   { provider: "xai", model: "grok-build",        input: 1.00, output: 2.00,  cached: 0.20,
-    aliases: ["grok-build-0.1", "grok-build-b"] },
+    aliases: ["grok-build-0.1", "grok-build-b"],
+    longContext: { thresholdInputTokens: 200_000, inclusive: true, inputMultiplier: 2, outputMultiplier: 2, cacheMultiplier: 2 } },
   { provider: "xai", model: "grok-4.6",          input: 2.00, output: 6.00,  cached: 0.50,
-    aliases: ["grok-4.6-latest"] },
-  // grok-4.5: docs.x.ai flagship (verified 2026-07-11); $2/$6, 500k context,
-  // no cached-input price published → cached tokens free.
+    aliases: ["grok-4.6-latest"],
+    longContext: { thresholdInputTokens: 200_000, inclusive: true, inputMultiplier: 2, outputMultiplier: 2, cacheMultiplier: 2 } },
   { provider: "xai", model: "grok-4.5",          input: 2.00, output: 6.00,  cached: 0.30,
-    aliases: ["grok-4.5-latest"] },
-  // grok-4.3: docs.x.ai Chat API pricing (verified 2026-07-08).
-  { provider: "xai", model: "grok-4.3",          input: 1.25, output: 2.50,  cached: 0.20 },
+    aliases: ["grok-4.5-latest"],
+    longContext: { thresholdInputTokens: 200_000, inclusive: true, inputMultiplier: 2, outputMultiplier: 2, cacheMultiplier: 2 } },
+  { provider: "xai", model: "grok-4.3",          input: 1.25, output: 2.50,  cached: 0.20,
+    longContext: { thresholdInputTokens: 200_000, inclusive: true, inputMultiplier: 2, outputMultiplier: 2, cacheMultiplier: 2 } },
+  { provider: "xai", model: "grok-4.20-multi-agent-0309", input: 1.25, output: 2.50, cached: 0.20,
+    longContext: { thresholdInputTokens: 200_000, inclusive: true, inputMultiplier: 2, outputMultiplier: 2, cacheMultiplier: 2 } },
+  { provider: "xai", model: "grok-4.20-0309-reasoning", input: 1.25, output: 2.50, cached: 0.20,
+    longContext: { thresholdInputTokens: 200_000, inclusive: true, inputMultiplier: 2, outputMultiplier: 2, cacheMultiplier: 2 } },
+  { provider: "xai", model: "grok-4.20-0309-non-reasoning", input: 1.25, output: 2.50, cached: 0.20,
+    longContext: { thresholdInputTokens: 200_000, inclusive: true, inputMultiplier: 2, outputMultiplier: 2, cacheMultiplier: 2 } },
   // Composer 2.5 fast variant runs inside Grok Build as
   // grok-composer-2.5-fast; $3/$15 per cursor.com/blog/composer-2-5
   // (verified 2026-07-08). No cached price published for the fast tier.
@@ -171,13 +182,14 @@ const PRICES = [
   { provider: "xai", model: "grok-2",            input: 2.00, output: 10.00, cached: 0 },
 
   // ─── DeepSeek ─────────────────────────────────────────────────────────────
-  // Verified against api-docs.deepseek.com/quick_start/pricing, 2026-08-21.
+  // Verified against api-docs.deepseek.com/quick_start/pricing, 2026-09-18.
   // Base fields are off-peak. priceCall selects the published 2x peak tier
-  // for calls from 01:00-04:00 and 06:00-10:00 UTC using the event timestamp.
-  { provider: "deepseek", model: "deepseek-v4-flash", input: 0.22, output: 0.66, cached: 0.007,
-    timeRates: { peakUtcHours: [[1, 4], [6, 10]], peak: { input: 0.44, output: 1.32, cached: 0.014 } } },
+  // for weekday calls from 01:00-04:00 and 06:00-10:00 UTC.
+  { provider: "deepseek", model: "deepseek-flash", input: 0.15, output: 0.60, cached: 0.003,
+    aliases: ["deepseek-v4-flash", "deepseek-v4-flash-vision-exp"],
+    timeRates: { peakUtcHours: [[1, 4], [6, 10]], peakUtcDays: [1, 2, 3, 4, 5], peak: { input: 0.30, output: 1.20, cached: 0.006 } } },
   { provider: "deepseek", model: "deepseek-v4-pro", input: 0.66, output: 1.98, cached: 0.022,
-    timeRates: { peakUtcHours: [[1, 4], [6, 10]], peak: { input: 1.32, output: 3.96, cached: 0.044 } } },
+    timeRates: { peakUtcHours: [[1, 4], [6, 10]], peakUtcDays: [1, 2, 3, 4, 5], peak: { input: 1.32, output: 3.96, cached: 0.044 } } },
 
   // ─── Cursor ───────────────────────────────────────────────────────────────
   // Composer 2.5 standard tier per cursor.com/docs/models-and-pricing
@@ -186,11 +198,12 @@ const PRICES = [
   { provider: "cursor", model: "composer-2.5", input: 0.50, output: 2.50, cached: 0.20 },
 
   // ─── Z.AI (GLM) ───────────────────────────────────────────────────────────
-  // Current text-model rates verified against docs.z.ai pricing, 2026-08-21.
+  // Current text-model rates verified against docs.z.ai pricing, 2026-09-18.
   // Cursor pricing docs list Composer 2.5 standard
   // separately; see the xai block for the fast tier used by Grok Build.
   { provider: "zai", model: "glm-5.2",       input: 1.40, output: 4.40, cached: 0.26 },
   { provider: "zai", model: "glm-5.3",       input: 1.40, output: 4.40, cached: 0.26 },
+  { provider: "zai", model: "glm-5.3-flash", input: 0.15, output: 0.50, cached: 0.03 },
   { provider: "zai", model: "glm-5.1",       input: 1.40, output: 4.40, cached: 0.26 },
   { provider: "zai", model: "glm-5",         input: 1.00, output: 3.20, cached: 0.20 },
   { provider: "zai", model: "glm-5-turbo",   input: 1.20, output: 4.00, cached: 0.24 },
@@ -363,13 +376,18 @@ function priceForCall(price, timestamp, promptInputTokens) {
     const date = new Date(Number(timestamp));
     if (!Number.isNaN(date.getTime())) {
       const hour = date.getUTCHours();
-      const peak = timeRates.peakUtcHours.some(([start, end]) => hour >= start && hour < end);
+      const dayAllowed = !Array.isArray(timeRates.peakUtcDays)
+        || timeRates.peakUtcDays.includes(date.getUTCDay());
+      const peak = dayAllowed && timeRates.peakUtcHours.some(([start, end]) => hour >= start && hour < end);
       if (peak) selected = { ...selected, ...timeRates.peak, pricingTier: 'peak' };
     }
   }
 
   const tier = price.longContext;
-  if (tier && promptInputTokens > tier.thresholdInputTokens) {
+  const longContext = tier && (tier.inclusive
+    ? promptInputTokens >= tier.thresholdInputTokens
+    : promptInputTokens > tier.thresholdInputTokens);
+  if (longContext) {
     selected = {
       ...selected,
       input: selected.input * tier.inputMultiplier,
@@ -586,11 +604,15 @@ function normalizePrice(price) {
   if (!price || !price.model) return null;
   const peak = price.timeRates?.peak;
   const peakUtcHours = price.timeRates?.peakUtcHours;
+  const peakUtcDays = price.timeRates?.peakUtcDays;
   const timeRates = peak && Array.isArray(peakUtcHours)
     ? {
         peakUtcHours: peakUtcHours
           .filter((range) => Array.isArray(range) && range.length === 2)
           .map(([start, end]) => [Number(start), Number(end)]),
+        ...(Array.isArray(peakUtcDays)
+          ? { peakUtcDays: peakUtcDays.map(Number).filter((day) => day >= 0 && day <= 6) }
+          : {}),
         peak: {
           input: Number(peak.input) || 0,
           output: Number(peak.output) || 0,
@@ -602,6 +624,7 @@ function normalizePrice(price) {
   const longContext = rawLongContext && Number(rawLongContext.thresholdInputTokens) > 0
     ? {
         thresholdInputTokens: Number(rawLongContext.thresholdInputTokens),
+        inclusive: Boolean(rawLongContext.inclusive),
         inputMultiplier: Number(rawLongContext.inputMultiplier) || 1,
         outputMultiplier: Number(rawLongContext.outputMultiplier) || 1,
         cacheMultiplier: Number(rawLongContext.cacheMultiplier) || 1,
